@@ -1,0 +1,58 @@
+_wandb:
+    value:
+        cli_version: 0.25.0
+        e:
+            6j61ksd3y13soew9enxnd7hby3982iex:
+                codePath: src/tools/train.py
+                codePathLocal: src/tools/train.py
+                cpu_count: 32
+                cpu_count_logical: 32
+                disk:
+                    /:
+                        total: "33501954048"
+                        used: "11260043264"
+                email: h.q.bockenhauer@student.tudelft.nl
+                executable: /home/hbockenhauer/.conda/envs/amp/bin/python
+                host: login02
+                memory:
+                    total: "404256354304"
+                os: Linux-4.18.0-553.85.1.el8_10.x86_64-x86_64-with-glibc2.28
+                program: /home/hbockenhauer/final_assignment/src/tools/train.py
+                python: CPython 3.9.23
+                root: outputs/centerpoint_radar_ep_50/wandb_logs
+                slurm:
+                    conf: /cm/shared/apps/slurm/var/etc/delftblue/slurm.conf
+                    root: /cm/shared/apps/slurm/current
+                startedAt: "2026-03-15T13:38:02.941279Z"
+                writerId: 6j61ksd3y13soew9enxnd7hby3982iex
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.9.23
+        t:
+            "1":
+                - 1
+                - 41
+                - 50
+                - 106
+            "2":
+                - 1
+                - 41
+                - 50
+                - 106
+            "3":
+                - 1
+                - 7
+                - 13
+                - 66
+            "4": 3.9.23
+            "5": 0.25.0
+            "12": 0.25.0
+            "13": linux-x86_64

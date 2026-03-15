@@ -1,0 +1,53 @@
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+You are using a CUDA device ('NVIDIA A100 80GB PCIe MIG 1g.10gb') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [MIG-GPU-6012c689-2ea7-2e7c-2e28-a87a01ae43ce/7/0]
+
+  | Name           | Type                | Params | Mode
+---------------------------------------------------------------
+0 | voxel_layer    | Voxelization        | 0      | train
+1 | voxel_encoder  | PillarFeatureNet    | 896    | train
+2 | middle_encoder | PointPillarsScatter | 0      | train
+3 | backbone       | SECOND              | 4.2 M  | train
+4 | neck           | SECONDFPN           | 598 K  | train
+5 | head           | CenterHead          | 791 K  | train
+---------------------------------------------------------------
+5.6 M     Trainable params
+0         Non-trainable params
+5.6 M     Total params
+22.396    Total estimated model params size (MB)
+175       Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+Sanity Checking DataLoader 0: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:06<00:00,  0.29it/s]
+Converting prediction to KITTI format
+Writing results to /tmp/tmpzw53zn5s/val_preds
+Evaluating kitti by default
+mAP Image BBox finished
+mAP bev BBox finished
+mAP 3D BBox finished
+Evaluating kitti by ROI
+mAP Image BBox finished
+mAP bev BBox finished
+mAP 3D BBox finished
+Results:
+Entire annotated area:
+Car: 0.0
+Pedestrian: 0.0
+Cyclist: 0.0
+mAP: 0.0
+Driving corridor area:
+Car: 0.0
+Pedestrian: 0.0
+Cyclist: 0.0
+mAP: 0.0
+
+Epoch 2: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████| 1285/1285 [02:13<00:00,  9.63it/s, v_num=sjyv]
+Converting prediction to KITTI format██████████████████████████████████████████████████████████████████████████████████████████████| 1296/1296 [00:26<00:00, 49.28it/s]
+Writing results to /tmp/tmprh_lbprz/val_preds
+Evaluating kitti by default
+mAP Image BBox finished
+mAP bev BBox finished
+
+Detected KeyboardInterrupt, attempting graceful shutdown ...

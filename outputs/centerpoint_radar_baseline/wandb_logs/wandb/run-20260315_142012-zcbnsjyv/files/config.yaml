@@ -1,0 +1,129 @@
+_wandb:
+    value:
+        cli_version: 0.25.0
+        e:
+            n8fgoy8s6p08xbw8tto3kdg8vsp0x7so:
+                args:
+                    - exp_id=centerpoint_radar_baseline
+                    - batch_size=4
+                    - num_workers=2
+                    - epochs=12
+                codePath: src/tools/train.py
+                codePathLocal: src/tools/train.py
+                cpu_count: 64
+                cpu_count_logical: 64
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "33501954048"
+                        used: "11175186432"
+                email: h.q.bockenhauer@student.tudelft.nl
+                executable: /home/hbockenhauer/.conda/envs/amp/bin/python
+                gpu: NVIDIA A100 80GB PCIe
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100 80GB PCIe
+                      uuid: GPU-6012c689-2ea7-2e7c-2e28-a87a01ae43ce
+                host: gpu020
+                memory:
+                    total: "540733616128"
+                os: Linux-4.18.0-553.85.1.el8_10.x86_64-x86_64-with-glibc2.28
+                program: /home/hbockenhauer/final_assignment/src/tools/train.py
+                python: CPython 3.9.23
+                root: outputs/centerpoint_radar_baseline/wandb_logs
+                slurm:
+                    cluster_name: delftblue
+                    conf: /cm/shared/apps/slurm/var/etc/delftblue/slurm.conf
+                    cpu_bind: quiet,mask_cpu:0x000000000000000C
+                    cpu_bind_list: "0x000000000000000C"
+                    cpu_bind_type: 'mask_cpu:'
+                    cpu_bind_verbose: quiet
+                    cpus_on_node: "2"
+                    cpus_per_task: "2"
+                    distribution: cyclic
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_account: education-me-courses-ro47020
+                    job_cpus_per_node: "2"
+                    job_gid: "100513"
+                    job_id: "9365159"
+                    job_name: ro47020_radar
+                    job_nodelist: gpu020
+                    job_num_nodes: "1"
+                    job_partition: gpu-a100-small
+                    job_qos: normal
+                    job_uid: "525434"
+                    job_user: hbockenhauer
+                    jobid: "9365159"
+                    launch_node_ipaddr: 172.21.4.5
+                    localid: "0"
+                    mpi_type: pmix
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: gpu020
+                    nprocs: "1"
+                    ntasks: "1"
+                    pmix_mapping_serv: (vector,(0,1,1))
+                    pmixp_abort_agent_port: "44573"
+                    prio_process: "0"
+                    procid: "0"
+                    pty_port: "39991"
+                    pty_win_col: "167"
+                    pty_win_row: "39"
+                    root: /cm/shared/apps/slurm/current
+                    srun_comm_host: 172.21.4.5
+                    srun_comm_port: "38057"
+                    step_gpus: "1"
+                    step_id: "0"
+                    step_launcher_port: "38057"
+                    step_nodelist: gpu020
+                    step_num_nodes: "1"
+                    step_num_tasks: "1"
+                    step_tasks_per_node: "1"
+                    stepid: "0"
+                    submit_dir: /home/hbockenhauer
+                    submit_host: login03
+                    task_pid: "3801073"
+                    tasks_per_node: "1"
+                    topology_addr: gpu020
+                    topology_addr_pattern: node
+                    umask: "0022"
+                    working_cluster: delftblue:head01:6817:9472:109
+                startedAt: "2026-03-15T13:20:12.016821Z"
+                writerId: n8fgoy8s6p08xbw8tto3kdg8vsp0x7so
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.9.23
+        t:
+            "1":
+                - 1
+                - 41
+                - 50
+                - 106
+            "2":
+                - 1
+                - 41
+                - 50
+                - 106
+            "3":
+                - 1
+                - 7
+                - 13
+                - 41
+                - 66
+            "4": 3.9.23
+            "5": 0.25.0
+            "12": 0.25.0
+            "13": linux-x86_64
+config:
+    value: '{''name'': ''centerpoint_radar'', ''exp_id'': ''${exp_id}'', ''data_root'': ''${data_root}'', ''class_names'': [''Car'', ''Pedestrian'', ''Cyclist''], ''point_cloud_range'': [0, -25.6, -3, 51.2, 25.6, 2], ''voxel_size'': [0.32, 0.32, 5], ''output_dir'': ''${output_dir}'', ''pts_voxel_layer'': {''max_num_points'': 5, ''voxel_size'': ''${model.voxel_size}'', ''point_cloud_range'': ''${model.point_cloud_range}'', ''max_voxels'': [8000, 20000]}, ''voxel_encoder'': {''in_channels'': 7, ''feat_channels'': [64], ''with_distance'': False, ''voxel_size'': ''${model.voxel_size}'', ''point_cloud_range'': ''${model.point_cloud_range}''}, ''middle_encoder'': {''in_channels'': 64, ''output_shape'': [160, 160]}, ''backbone'': {''in_channels'': 64, ''layer_nums'': [3, 5, 5], ''layer_strides'': [2, 2, 2], ''out_channels'': [64, 128, 256]}, ''neck'': {''in_channels'': [64, 128, 256], ''upsample_strides'': [1, 2, 4], ''out_channels'': [128, 128, 128]}, ''head'': {''in_channels'': 384, ''tasks'': [{''num_class'': 1, ''class_names'': [''Car'']}, {''num_class'': 1, ''class_names'': [''Pedestrian'']}, {''num_class'': 1, ''class_names'': [''Cyclist'']}], ''common_heads'': {''reg'': [2, 2], ''height'': [1, 2], ''dim'': [3, 2], ''rot'': [2, 2], ''heatmap'': None}, ''share_conv_channel'': 64, ''bbox_coder'': {''pc_range'': ''${model.point_cloud_range}'', ''post_center_range'': [-5, -30.6, -6, 56.2, 30.6, 5], ''max_num'': 350, ''score_threshold'': 0.1, ''out_size_factor'': 2, ''voxel_size'': [0.32, 0.32], ''code_size'': 7}, ''separate_head'': {''in_channels'': None, ''heads'': None, ''init_bias'': -2.19, ''final_kernel'': 3}, ''loss_cls'': {''reduction'': ''mean'', ''loss_weight'': 1.0}, ''loss_bbox'': {''reduction'': ''mean'', ''loss_weight'': 0.25}, ''norm_bbox'': True, ''train_cfg'': {''grid_size'': [160, 160, 1], ''point_cloud_range'': ''${model.point_cloud_range}'', ''voxel_size'': ''${model.voxel_size}'', ''out_size_factor'': 2, ''dense_reg'': 1, ''gaussian_overlap'': 0.1, ''max_objs'': 500, ''min_radius'': 2, ''code_weights'': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}, ''test_cfg'': {''post_center_limit_range'': [-5, -30.6, -6, 56.2, 30.6, 5], ''max_per_img'': 500, ''max_pool_nms'': False, ''min_radius'': [4, 0.3, 0.85], ''score_threshold'': 0.1, ''out_size_factor'': 2, ''nms_type'': ''circle'', ''pre_max_size'': 1000, ''post_max_size'': 83, ''nms_thr'': 0.2}}, ''optimizer'': {''lr'': 0.001, ''weight_decay'': 0.01}}'
