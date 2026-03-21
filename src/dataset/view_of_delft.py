@@ -37,7 +37,19 @@ class ViewOfDelft(Dataset):
     def __init__(self, 
                  data_root = 'data/view_of_delft', 
                  sequential_loading=False,
-                 split = 'train'):
+                 split = 'train',
+                 doppler_index=4,
+                 rcs_index=3,
+                 doppler_clip=None,
+                 doppler_normalize=False,
+                 drop_static_points=False,
+                 static_velocity_threshold=0.2,
+                 static_keep_prob=1.0,
+                 augment_train_points=False,
+                 point_dropout_prob=0.0,
+                 xy_noise_std=0.0,
+                 rcs_noise_std=0.0,
+                 doppler_noise_std=0.0):
         super().__init__()
         
         self.data_root = data_root
@@ -48,8 +60,88 @@ class ViewOfDelft(Dataset):
         with open(split_file, 'r') as f:
             lines = f.readlines()
             self.sample_list = [line.strip() for line in lines]
+
+        self.doppler_index = doppler_index
+        self.rcs_index = rcs_index
+        self.doppler_clip = doppler_clip
+        self.doppler_normalize = doppler_normalize
+        self.drop_static_points = drop_static_points
+        self.static_velocity_threshold = static_velocity_threshold
+        self.static_keep_prob = static_keep_prob
+        self.augment_train_points = augment_train_points
+        self.point_dropout_prob = point_dropout_prob
+        self.xy_noise_std = xy_noise_std
+        self.rcs_noise_std = rcs_noise_std
+        self.doppler_noise_std = doppler_noise_std
         
         self.vod_kitti_locations = KittiLocations(root_dir = data_root)
+
+    def _apply_doppler_preprocessing(self, radar_data):
+        """Apply optional Doppler preprocessing for ablation studies."""
+        if radar_data is None:
+            return radar_data
+
+        arr = np.asarray(radar_data)
+        if arr.ndim != 2 or arr.shape[0] == 0:
+            return arr
+        if self.doppler_index < 0 or self.doppler_index >= arr.shape[1]:
+            return arr
+
+        out = arr.copy()
+        doppler = out[:, self.doppler_index]
+
+        if self.doppler_clip is not None and len(self.doppler_clip) == 2:
+            dmin, dmax = self.doppler_clip
+            doppler = np.clip(doppler, dmin, dmax)
+
+        if self.doppler_normalize:
+            mu = float(np.mean(doppler))
+            sigma = float(np.std(doppler))
+            doppler = (doppler - mu) / max(sigma, 1e-6)
+
+        out[:, self.doppler_index] = doppler
+
+        if self.drop_static_points:
+            moving_mask = np.abs(doppler) >= self.static_velocity_threshold
+            keep_mask = moving_mask
+            if self.split == 'train' and self.static_keep_prob < 1.0:
+                static_mask = ~moving_mask
+                keep_static = np.random.rand(static_mask.sum()) < self.static_keep_prob
+                keep_mask = moving_mask.copy()
+                keep_mask[static_mask] = keep_static
+
+            if keep_mask.any():
+                out = out[keep_mask]
+
+        return out
+
+    def _apply_training_augmentation(self, radar_data):
+        """Apply optional point-level augmentation without label transforms."""
+        arr = np.asarray(radar_data)
+        if (self.split != 'train' or not self.augment_train_points or
+                arr.ndim != 2 or arr.shape[0] == 0):
+            return arr
+
+        out = arr.copy()
+
+        if self.point_dropout_prob > 0.0:
+            keep = np.random.rand(out.shape[0]) > self.point_dropout_prob
+            if keep.any():
+                out = out[keep]
+
+        if self.xy_noise_std > 0.0 and out.shape[1] >= 2:
+            out[:, 0] += np.random.normal(0.0, self.xy_noise_std, size=out.shape[0])
+            out[:, 1] += np.random.normal(0.0, self.xy_noise_std, size=out.shape[0])
+
+        if self.rcs_noise_std > 0.0 and 0 <= self.rcs_index < out.shape[1]:
+            out[:, self.rcs_index] += np.random.normal(
+                0.0, self.rcs_noise_std, size=out.shape[0])
+
+        if self.doppler_noise_std > 0.0 and 0 <= self.doppler_index < out.shape[1]:
+            out[:, self.doppler_index] += np.random.normal(
+                0.0, self.doppler_noise_std, size=out.shape[0])
+
+        return out
     def __len__(self):
         return len(self.sample_list)
 
@@ -60,6 +152,8 @@ class ViewOfDelft(Dataset):
         local_transforms = FrameTransformMatrix(vod_frame_data)
         
         radar_data = vod_frame_data.radar_data
+        radar_data = self._apply_doppler_preprocessing(radar_data)
+        radar_data = self._apply_training_augmentation(radar_data)
 
         
         gt_labels_3d_list = []

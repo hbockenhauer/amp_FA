@@ -21,9 +21,19 @@ from src.dataset import ViewOfDelft, collate_vod_batch
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
     L.seed_everything(cfg.seed, workers=True)
+
+    dataset_cfg = {}
+    if 'dataset' in cfg.model:
+        dataset_cfg = OmegaConf.to_container(cfg.model.dataset, resolve=True)
     
-    train_dataset = ViewOfDelft(data_root=cfg.data_root, split='train')
-    val_dataset = ViewOfDelft(data_root=cfg.data_root, split='val')
+    train_dataset = ViewOfDelft(
+        data_root=cfg.data_root,
+        split='train',
+        **dataset_cfg)
+    val_dataset = ViewOfDelft(
+        data_root=cfg.data_root,
+        split='val',
+        **dataset_cfg)
     
     train_dataloader = DataLoader(train_dataset, 
                                   batch_size=cfg.batch_size, 

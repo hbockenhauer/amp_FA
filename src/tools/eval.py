@@ -22,8 +22,15 @@ from src.dataset import ViewOfDelft, collate_vod_batch
 def eval(cfg: DictConfig) -> None:
     print('Evaluating model...')
     L.seed_everything(cfg.seed, workers=True)
+
+    dataset_cfg = {}
+    if 'dataset' in cfg.model:
+        dataset_cfg = OmegaConf.to_container(cfg.model.dataset, resolve=True)
     
-    val_dataset = ViewOfDelft(data_root=cfg.data_root, split='val')
+    val_dataset = ViewOfDelft(
+        data_root=cfg.data_root,
+        split='val',
+        **dataset_cfg)
     val_dataloader = DataLoader(val_dataset, 
                                 batch_size=1, 
                                 num_workers=cfg.num_workers, 

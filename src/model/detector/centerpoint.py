@@ -20,7 +20,7 @@ from src.ops import Voxelization
 from src.model.voxel_encoders import PillarFeatureNet
 from src.model.middle_encoders import PointPillarsScatter
 from src.model.backbones import SECOND
-from src.model.necks import SECONDFPN
+from src.model.necks import SECONDFPN, BEVRefineNeck
 from src.model.heads import CenterHead
 
 class CenterPoint(L.LightningModule):
@@ -40,12 +40,22 @@ class CenterPoint(L.LightningModule):
         backbone_config = config.get('backbone', None)
         neck_config = config.get('neck', None)
         head_config = config.get('head', None)
+        neck_refine_cfg = config.get('neck_refine', {})
+        tta_cfg = config.get('test_time_augmentation', {})
         
         self.voxel_layer = Voxelization(**voxel_layer_config)
         self.voxel_encoder = PillarFeatureNet(**voxel_encoder_config)
         self.middle_encoder = PointPillarsScatter(**middle_encoder_config)
         self.backbone = SECOND(**backbone_config)
         self.neck = SECONDFPN(**neck_config)
+        self.use_neck_refine = neck_refine_cfg.get('enabled', False)
+        if self.use_neck_refine:
+            self.neck_refine = BEVRefineNeck(
+                in_channels=neck_refine_cfg.get('in_channels', 384),
+                hidden_channels=neck_refine_cfg.get('hidden_channels', 384),
+                num_layers=neck_refine_cfg.get('num_layers', 2))
+        else:
+            self.neck_refine = None
         self.head = CenterHead(**head_config)
         
         self.optimizer_config = config.get('optimizer', None)
@@ -57,6 +67,14 @@ class CenterPoint(L.LightningModule):
         self.inference_mode = config.get('inference_mode', 'val')
         self.save_results = config.get('save_preds_results', False)
         self.val_results_list =[]
+
+        self.use_doppler_backbone_attn = backbone_config.get(
+            'use_doppler_attention', False)
+        self.doppler_index = voxel_encoder_config.get('doppler_index', 4)
+        velocity_aux_cfg = head_config.get('velocity_auxiliary', {})
+        self.use_velocity_auxiliary = velocity_aux_cfg.get('enabled', False)
+        self.tta_enable = tta_cfg.get('enabled', False)
+        self.tta_flip_y = tta_cfg.get('flip_y', True)
         
     ## Voxelization
     def voxelize(self, points):
@@ -86,24 +104,110 @@ class CenterPoint(L.LightningModule):
         voxels = voxel_dict['voxels']
         num_points = voxel_dict['num_points']
         coors = voxel_dict['coors']
+
+        doppler_mean_map = None
+        doppler_std_map = None
+        if self.use_doppler_backbone_attn or self.use_velocity_auxiliary:
+            bs = coors[-1, 0].item() + 1
+            doppler_mean_map, doppler_std_map = self._build_doppler_bev_maps(
+                voxels, num_points, coors, bs)
     
         voxel_features = self.voxel_encoder(voxels, num_points, coors)
         bs = coors[-1,0].item() + 1
         bev_feats = self.middle_encoder(voxel_features, coors, bs)        
-        backbone_feats = self.backbone(bev_feats)
+        backbone_feats = self.backbone(
+            bev_feats,
+            doppler_mean_map=doppler_mean_map,
+            doppler_std_map=doppler_std_map)
         neck_feats = self.neck(backbone_feats)
+        if self.neck_refine is not None:
+            neck_feats = self.neck_refine(neck_feats)
         ret_dict = self.head(neck_feats)
-        return ret_dict
+        model_aux = {
+            'doppler_mean_map': doppler_mean_map,
+            'doppler_std_map': doppler_std_map
+        }
+        return ret_dict, model_aux
+
+    def _model_forward_tta(self, pts_data):
+        """Optional test-time augmentation with y-flip fusion."""
+        ret_base, aux_base = self._model_forward(pts_data)
+        if not self.tta_enable or not self.tta_flip_y:
+            return ret_base, aux_base
+
+        pts_flip = [p.clone() for p in pts_data]
+        for p in pts_flip:
+            p[:, 1] = -p[:, 1]
+
+        ret_flip, _ = self._model_forward(pts_flip)
+
+        for level in range(len(ret_base)):
+            for task_id in range(len(ret_base[level])):
+                for key in ret_base[level][task_id].keys():
+                    if key not in ret_flip[level][task_id]:
+                        continue
+                    flip_pred = ret_flip[level][task_id][key]
+                    if key == 'reg':
+                        # y offset channel changes sign under y-mirroring.
+                        flip_pred = flip_pred.clone()
+                        if flip_pred.shape[1] > 1:
+                            flip_pred[:, 1] = -flip_pred[:, 1]
+                    elif key == 'rot':
+                        # yaw is represented by sin/cos; sin changes sign.
+                        flip_pred = flip_pred.clone()
+                        if flip_pred.shape[1] > 0:
+                            flip_pred[:, 0] = -flip_pred[:, 0]
+                    elif key == 'vel':
+                        # vy flips sign.
+                        flip_pred = flip_pred.clone()
+                        if flip_pred.shape[1] > 1:
+                            flip_pred[:, 1] = -flip_pred[:, 1]
+
+                    ret_base[level][task_id][key] = (
+                        ret_base[level][task_id][key] + flip_pred) / 2.0
+
+        return ret_base, aux_base
+
+    def _build_doppler_bev_maps(self, voxels, num_points, coors, batch_size):
+        """Build per-pillar Doppler mean/std maps aligned with BEV grid."""
+        if self.doppler_index < 0 or self.doppler_index >= voxels.shape[-1]:
+            raise ValueError(
+                f'doppler_index={self.doppler_index} out of range for voxels '
+                f'with last dim={voxels.shape[-1]}')
+
+        valid = (
+            torch.arange(voxels.shape[1], device=voxels.device).unsqueeze(0)
+            < num_points.unsqueeze(1))
+        valid_f = valid.type_as(voxels)
+
+        doppler = voxels[:, :, self.doppler_index]
+        denom = num_points.type_as(voxels).clamp_min(1).unsqueeze(1)
+        mean = (doppler * valid_f).sum(dim=1, keepdim=True) / denom
+        var = ((doppler - mean).pow(2) * valid_f).sum(dim=1, keepdim=True) / denom
+        std = torch.sqrt(var + 1e-6)
+
+        h = self.middle_encoder.ny
+        w = self.middle_encoder.nx
+        mean_map = voxels.new_zeros((batch_size, 1, h, w))
+        std_map = voxels.new_zeros((batch_size, 1, h, w))
+
+        b = coors[:, 0].long()
+        y = coors[:, 2].long()
+        x = coors[:, 3].long()
+
+        mean_map[b, 0, y, x] = mean.squeeze(1)
+        std_map[b, 0, y, x] = std.squeeze(1)
+        return mean_map, std_map
     
     def training_step(self, batch, batch_idx):
         pts_data = batch['pts']
         gt_label_3d = batch['gt_labels_3d']
         gt_bboxes_3d = batch['gt_bboxes_3d']
         
-        ret_dict = self._model_forward(pts_data)
+        ret_dict, model_aux = self._model_forward(pts_data)
         loss_input = [gt_bboxes_3d, gt_label_3d, ret_dict]
         
-        losses = self.head.loss(*loss_input)
+        losses = self.head.loss(*loss_input, **model_aux)
         
         log_vars = OrderedDict()
         for loss_name, loss_value in losses.items():
@@ -133,7 +237,7 @@ class CenterPoint(L.LightningModule):
         gt_label_3d = batch['gt_labels_3d']
         gt_bboxes_3d = batch['gt_bboxes_3d']
         
-        ret_dict = self._model_forward(pts_data)
+        ret_dict, model_aux = self._model_forward_tta(pts_data)
         loss_input = [gt_bboxes_3d, gt_label_3d, ret_dict]
         
         bbox_list = self.head.get_bboxes(ret_dict, img_metas=metas)
@@ -145,7 +249,7 @@ class CenterPoint(L.LightningModule):
             for bboxes, scores, labels in bbox_list
         ]
 
-        losses = self.head.loss(*loss_input)
+        losses = self.head.loss(*loss_input, **model_aux)
         
         log_vars = OrderedDict()
         for loss_name, loss_value in losses.items():

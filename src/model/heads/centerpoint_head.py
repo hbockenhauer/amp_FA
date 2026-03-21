@@ -5,6 +5,7 @@ import os.path as osp
 
 import torch
 from torch import Tensor, nn
+import torch.nn.functional as F
 from torch.nn import Conv2d
 
 
@@ -147,7 +148,10 @@ class CenterHead(nn.Module):
                  bias: str = 'auto',
                  norm_bbox: bool = True,
                  train_cfg: Optional[dict] = None,
-                 test_cfg: Optional[dict] = None):
+                 test_cfg: Optional[dict] = None,
+                 velocity_auxiliary: Optional[dict] = None,
+                 velocity_smoothness: Optional[dict] = None,
+                 use_pred_vel_in_decode: bool = False):
         super().__init__()
         self.all_classes = ('Car', 'Pedestrian', 'Cyclist')
         
@@ -158,6 +162,18 @@ class CenterHead(nn.Module):
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.norm_bbox = norm_bbox
+        self.use_pred_vel_in_decode = use_pred_vel_in_decode
+
+        velocity_auxiliary = velocity_auxiliary or {}
+        self.velocity_aux_enabled = velocity_auxiliary.get('enabled', False)
+        self.velocity_aux_loss_weight = velocity_auxiliary.get('loss_weight', 0.1)
+        self.velocity_aux_use_abs_speed = velocity_auxiliary.get('use_abs_speed', True)
+        self.velocity_aux_reliability_sigma = velocity_auxiliary.get(
+            'reliability_sigma', 1.0)
+
+        velocity_smoothness = velocity_smoothness or {}
+        self.velocity_smooth_enabled = velocity_smoothness.get('enabled', False)
+        self.velocity_smooth_loss_weight = velocity_smoothness.get('loss_weight', 0.01)
 
         self.loss_cls = GaussianFocalLoss(**loss_cls)
         self.loss_bbox = L1Loss(**loss_bbox)
@@ -176,9 +192,56 @@ class CenterHead(nn.Module):
         self.task_heads = nn.ModuleList()
         for num_cls in num_classes:
             heads = copy.deepcopy(common_heads)
+            if self.velocity_aux_enabled or self.velocity_smooth_enabled:
+                heads.setdefault('vel', (2, 2))
             heads.update(dict(heatmap=(num_cls, num_heatmap_convs)))
             separate_head.update(in_channels=share_conv_channel, heads=heads)
             self.task_heads.append(SeparateHead(**separate_head))
+
+    def _velocity_auxiliary_loss(self, preds, inds, masks, doppler_mean_map,
+                                 doppler_std_map=None):
+        """Supervise predicted velocity magnitude with Doppler magnitude."""
+        vel_map = preds['vel']
+        b, _, h, w = vel_map.shape
+        doppler_mean_map = F.interpolate(doppler_mean_map, size=(h, w), mode='nearest')
+        doppler_target = doppler_mean_map.permute(0, 2, 3, 1).contiguous().view(b, -1, 1)
+        doppler_target = self._gather_feat(doppler_target, inds)
+
+        vel_flat = vel_map.permute(0, 2, 3, 1).contiguous().view(b, -1, 2)
+        vel_pred = self._gather_feat(vel_flat, inds)
+        speed_pred = torch.norm(vel_pred, dim=-1, keepdim=True)
+        if self.velocity_aux_use_abs_speed:
+            speed_target = doppler_target.abs()
+        else:
+            speed_target = doppler_target
+
+        vel_mask = masks.unsqueeze(-1).float().to(speed_pred.device)
+        if doppler_std_map is not None:
+            doppler_std_map = F.interpolate(doppler_std_map, size=(h, w), mode='nearest')
+            std_target = doppler_std_map.permute(0, 2, 3, 1).contiguous().view(b, -1, 1)
+            std_target = self._gather_feat(std_target, inds)
+            reliability = torch.exp(
+                -(std_target.pow(2)) /
+                (2 * self.velocity_aux_reliability_sigma * self.velocity_aux_reliability_sigma)
+            )
+            vel_mask = vel_mask * reliability
+
+        loss = (torch.abs(speed_pred - speed_target) * vel_mask).sum()
+        loss = loss / (vel_mask.sum() + 1e-4)
+        return loss
+
+    def _velocity_smoothness_loss(self, preds):
+        """Encourage local smoothness in the predicted velocity field."""
+        vel_map = preds['vel']
+        heat = preds['heatmap'].sigmoid().amax(dim=1, keepdim=True).detach()
+        w_x = heat[:, :, :, 1:] * heat[:, :, :, :-1]
+        w_y = heat[:, :, 1:, :] * heat[:, :, :-1, :]
+
+        dx = (vel_map[:, :, :, 1:] - vel_map[:, :, :, :-1]).abs().mean(dim=1, keepdim=True)
+        dy = (vel_map[:, :, 1:, :] - vel_map[:, :, :-1, :]).abs().mean(dim=1, keepdim=True)
+        loss_x = (dx * w_x).sum() / (w_x.sum() + 1e-4)
+        loss_y = (dy * w_y).sum() / (w_y.sum() + 1e-4)
+        return loss_x + loss_y
 
     def forward_single(self, x: Tensor) -> dict:
         """Forward function for CenterPoint.
@@ -421,6 +484,8 @@ class CenterHead(nn.Module):
         """
 
         heatmaps, anno_boxes, inds, masks = self.get_targets(gt_bboxes_3d, gt_labels_3d)
+        doppler_mean_map = kwargs.get('doppler_mean_map', None)
+        doppler_std_map = kwargs.get('doppler_std_map', None)
 
 
         loss_dict = dict()
@@ -459,6 +524,22 @@ class CenterHead(nn.Module):
                 pred, target_box, bbox_weights, avg_factor=(num + 1e-4))
             loss_dict[f'task{task_id}.loss_heatmap'] = loss_heatmap
             loss_dict[f'task{task_id}.loss_bbox'] = loss_bbox
+
+            if (self.velocity_aux_enabled and 'vel' in preds_dict[0]
+                    and doppler_mean_map is not None):
+                loss_vel = self._velocity_auxiliary_loss(
+                    preds_dict[0],
+                    ind,
+                    masks[task_id],
+                    doppler_mean_map,
+                    doppler_std_map=doppler_std_map)
+                loss_dict[f'task{task_id}.loss_vel'] = (
+                    loss_vel * self.velocity_aux_loss_weight)
+
+            if self.velocity_smooth_enabled and 'vel' in preds_dict[0]:
+                loss_vel_smooth = self._velocity_smoothness_loss(preds_dict[0])
+                loss_dict[f'task{task_id}.loss_vel_smooth'] = (
+                    loss_vel_smooth * self.velocity_smooth_loss_weight)
         return loss_dict
 
     def get_bboxes(self, preds_dicts, img_metas, img=None, rescale=False):
@@ -488,7 +569,7 @@ class CenterHead(nn.Module):
             batch_rots = preds_dict[0]['rot'][:, 0].unsqueeze(1)
             batch_rotc = preds_dict[0]['rot'][:, 1].unsqueeze(1)
 
-            if 'vel' in preds_dict[0]:
+            if 'vel' in preds_dict[0] and self.use_pred_vel_in_decode:
                 batch_vel = preds_dict[0]['vel']
             else:
                 batch_vel = None
