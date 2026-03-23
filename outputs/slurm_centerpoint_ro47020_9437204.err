@@ -1,0 +1,35 @@
+[rank: 0] Seed set to 47020
+wandb: WARNING The anonymous setting has no effect and will be removed in a future version.
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from /home/martwevers/.netrc.
+wandb: Currently logged in as: martw (martw-tu-delft) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: setting up run gvf5egmv
+wandb: Tracking run with wandb version 0.25.0
+wandb: Run data is saved locally in outputs/centerpoint_baseline_db_try_slurm/wandb_logs/wandb/run-20260323_151556-gvf5egmv
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run centerpoint_baseline_db_try_slurm
+wandb: ⭐️ View project at https://wandb.ai/martw-tu-delft/amp
+wandb: 🚀 View run at https://wandb.ai/martw-tu-delft/amp/runs/gvf5egmv
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+You are using a CUDA device ('NVIDIA A100 80GB PCIe MIG 1g.10gb') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [MIG-GPU-99f13452-b4cf-19e2-776f-3d40f2a5da23/7/0]
+
+  | Name           | Type                | Params | Mode 
+---------------------------------------------------------------
+0 | voxel_layer    | Voxelization        | 0      | train
+1 | voxel_encoder  | PillarFeatureNet    | 1.1 K  | train
+2 | middle_encoder | PointPillarsScatter | 0      | train
+3 | backbone       | SECOND              | 4.2 M  | train
+4 | neck           | SECONDFPN           | 598 K  | train
+5 | head           | CenterHead          | 791 K  | train
+---------------------------------------------------------------
+5.6 M     Trainable params
+0         Non-trainable params
+5.6 M     Total params
+22.397    Total estimated model params size (MB)
+175       Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+/home/martwevers/.conda/envs/amp/lib/python3.9/site-packages/torchvision/transforms/functional.py:154: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:203.)
+  img = torch.from_numpy(pic.transpose((2, 0, 1))).contiguous()
