@@ -1,1 +1,0 @@
-from .centerpoint_head import CenterHead
