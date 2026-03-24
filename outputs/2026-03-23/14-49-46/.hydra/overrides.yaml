@@ -1,4 +1,0 @@
-- exp_id=centerpoint_baseline_db_try_slurm
-- batch_size=4
-- num_workers=2
-- epochs=12

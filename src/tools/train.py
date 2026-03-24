@@ -18,6 +18,9 @@ from torch.utils.data import DataLoader
 from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
 
+import torch
+torch.set_float32_matmul_precision('medium')
+
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
     L.seed_everything(cfg.seed, workers=True)
@@ -69,6 +72,7 @@ def train(cfg: DictConfig)-> None:
         max_epochs=cfg.epochs,
         sync_batchnorm=cfg.sync_bn,
         enable_model_summary= True,
+        profiler="simple",
     )
     
     trainer.fit(model, 

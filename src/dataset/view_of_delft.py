@@ -57,35 +57,42 @@ class ViewOfDelft(Dataset):
         
         radar_data = vod_frame_data.radar_data
 
-        # --- POINT PAINTING IMPLEMENTATION ---
-        image = vod_frame_data.image 
-        
-        with torch.no_grad():
-            img_tensor = self.image_transform(image).unsqueeze(0).to(self.device)
-            seg_output = self.seg_model(img_tensor)['out'][0] 
-            seg_probs = torch.softmax(seg_output, dim=0) 
-            painted_channels = seg_probs[[3, 1, 2], :, :] 
-        
-        trans_homo_radar = np.ones((radar_data.shape[0], 4))
-        trans_homo_radar[:, :3] = radar_data[:, :3]
+        # --- NEW FAST LOADING --- (Requires dataset preprocessing with: preprocess_pointpainting.py)
+        folder_name = 'painted_radar'
+        painted_radar_path = os.path.join(os.getcwd(), folder_name, f'{num_frame}.npy')
+        radar_data = np.load(painted_radar_path)
+        radar_data = torch.tensor(radar_data, dtype=torch.float32)
+        # ------------------------
 
-        t_camProj_lidar = local_transforms.camera_projection_matrix @ local_transforms.t_camera_lidar
-
-        #uv_coords_homo = homogeneous_transformation(trans_homo_radar, t_camProj_lidar)
-        uv_coords_homo = (t_camProj_lidar @ trans_homo_radar.T).T
-        u = (uv_coords_homo[:, 0] / uv_coords_homo[:, 2]).astype(int)
-        v = (uv_coords_homo[:, 1] / uv_coords_homo[:, 2]).astype(int)
-        
-        H, W = image.shape[:2]
-        valid_mask = (u >= 0) & (u < W) & (v >= 0) & (v < H) & (uv_coords_homo[:, 2] > 0)
-        
-        point_scores = np.zeros((radar_data.shape[0], 3), dtype=np.float32)
-        valid_u = u[valid_mask]
-        valid_v = v[valid_mask]
-        point_scores[valid_mask] = painted_channels[:, valid_v, valid_u].cpu().numpy().T
-        
-        radar_data = np.concatenate([radar_data, point_scores], axis=-1)
-        # -------------------------------------
+        ## --- POINT PAINTING IMPLEMENTATION ---
+        #image = vod_frame_data.image 
+        #
+        #with torch.no_grad():
+        #    img_tensor = self.image_transform(image).unsqueeze(0).to(self.device)
+        #    seg_output = self.seg_model(img_tensor)['out'][0] 
+        #    seg_probs = torch.softmax(seg_output, dim=0) 
+        #    painted_channels = seg_probs[[3, 1, 2], :, :] 
+        #
+        #trans_homo_radar = np.ones((radar_data.shape[0], 4))
+        #trans_homo_radar[:, :3] = radar_data[:, :3]
+#
+        #t_camProj_lidar = local_transforms.camera_projection_matrix @ local_transforms.t_camera_lidar
+#
+        ##uv_coords_homo = homogeneous_transformation(trans_homo_radar, t_camProj_lidar)
+        #uv_coords_homo = (t_camProj_lidar @ trans_homo_radar.T).T
+        #u = (uv_coords_homo[:, 0] / uv_coords_homo[:, 2]).astype(int)
+        #v = (uv_coords_homo[:, 1] / uv_coords_homo[:, 2]).astype(int)
+        #
+        #H, W = image.shape[:2]
+        #valid_mask = (u >= 0) & (u < W) & (v >= 0) & (v < H) & (uv_coords_homo[:, 2] > 0)
+        #
+        #point_scores = np.zeros((radar_data.shape[0], 3), dtype=np.float32)
+        #valid_u = u[valid_mask]
+        #valid_v = v[valid_mask]
+        #point_scores[valid_mask] = painted_channels[:, valid_v, valid_u].cpu().numpy().T
+        #
+        #radar_data = np.concatenate([radar_data, point_scores], axis=-1)
+        ## -------------------------------------
 
         gt_labels_3d_list = []
         gt_bboxes_3d_list = []
