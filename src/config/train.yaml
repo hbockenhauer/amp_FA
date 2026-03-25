@@ -24,5 +24,18 @@ log_every: 50
 val_every: 3
 save_top_model: 5
 
+early_stopping:
+  enabled: true
+  monitor: validation/entire_area/mAP
+  mode: max
+  # With val_every=2, patience=2 allows ~4 extra epochs before stopping.
+  patience: 2
+  min_delta: 0.0
+  strict: true
+
+# Prevent jobs from hanging forever in online W&B teardown.
+wandb_finish_timeout_s: 20
+force_exit_on_wandb_hang: true
+
 
 

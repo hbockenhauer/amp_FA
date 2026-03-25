@@ -1,4 +1,0 @@
-- exp_id=centerpoint_radar_baseline
-- batch_size=4
-- num_workers=2
-- epochs=12

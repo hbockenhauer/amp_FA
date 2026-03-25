@@ -12,7 +12,7 @@ from  omegaconf import DictConfig, OmegaConf
 
 import lightning as L
 from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
+from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 
 import torch
 from torch.utils.data import DataLoader
@@ -20,10 +20,14 @@ from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
 
 
-def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> None:
-    """Finalize W&B without allowing teardown to block SLURM slot release."""
+def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> bool:
+    """Finalize W&B without allowing teardown to block SLURM slot release.
+
+    Returns:
+        bool: True if W&B teardown appears to be hanging after timeout.
+    """
     if wandb.run is None:
-        return
+        return False
 
     errors = []
 
@@ -37,7 +41,9 @@ def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> None:
     thread.start()
     thread.join(timeout=timeout_s)
 
+    is_hanging = False
     if thread.is_alive():
+        is_hanging = True
         print(
             f"Warning: wandb.finish() exceeded {timeout_s:.0f}s, forcing teardown.",
             flush=True,
@@ -49,6 +55,8 @@ def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> None:
 
     if errors:
         print(f"Warning: wandb.finish() raised exception: {errors[0]}", flush=True)
+
+    return is_hanging
 
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
@@ -90,6 +98,19 @@ def train(cfg: DictConfig)-> None:
         ),
         LearningRateMonitor(logging_interval="epoch")
     ]
+
+    early_cfg = cfg.get('early_stopping', {})
+    if early_cfg.get('enabled', False):
+        callbacks.append(
+            EarlyStopping(
+                monitor=early_cfg.get('monitor', 'validation/entire_area/mAP'),
+                mode=early_cfg.get('mode', 'max'),
+                patience=early_cfg.get('patience', 2),
+                min_delta=early_cfg.get('min_delta', 0.0),
+                strict=early_cfg.get('strict', True),
+                verbose=True,
+            ))
+
     logger = WandbLogger(
         save_dir=osp.join(cfg.output_dir, 'wandb_logs'),
         project='amp',
@@ -120,7 +141,15 @@ def train(cfg: DictConfig)-> None:
                     val_dataloaders=val_dataloader,
                     ckpt_path=cfg.checkpoint_path)
     finally:
-        _finish_wandb_with_timeout(timeout_s=20.0)
+        timeout_s = float(cfg.get('wandb_finish_timeout_s', 20.0))
+        force_exit_on_hang = bool(cfg.get('force_exit_on_wandb_hang', True))
+        hanging = _finish_wandb_with_timeout(timeout_s=timeout_s)
+        # As a last resort, force-exit so SLURM can release the slot and start queued jobs.
+        if hanging and force_exit_on_hang:
+            print("Warning: forcing process exit after W&B hang to unblock scheduler.", flush=True)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(0)
     
 if __name__ == '__main__':
     train()
