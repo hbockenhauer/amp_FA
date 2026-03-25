@@ -14,7 +14,7 @@ pts_voxel_layer:
   max_voxels: [8000, 20000]
 
 voxel_encoder:
-  in_channels: 10
+  in_channels: 10 # From 7 to 10 because of the 3 extra channels from ResNet/mobileNet segmentation (class scores)
   feat_channels: [64]
   with_distance: FALSE
   voxel_size: ${model.voxel_size}
