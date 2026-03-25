@@ -18,7 +18,7 @@ import torch
 from torch.utils.data import DataLoader
 from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
-
+torch.set_float32_matmul_precision('medium')
 
 def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> bool:
     """Finalize W&B without allowing teardown to block SLURM slot release.
@@ -133,6 +133,7 @@ def train(cfg: DictConfig)-> None:
         max_epochs=cfg.epochs,
         sync_batchnorm=cfg.sync_bn,
         enable_model_summary= True,
+        profiler="simple",
     )
 
     try:
