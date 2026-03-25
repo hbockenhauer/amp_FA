@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+outputs/
+lightning_logs/
+wandb/
+
+*.ckpt
+*.pt
+*.pth
+
+.hydra/
+*.log

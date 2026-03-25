@@ -191,9 +191,12 @@ class CenterHead(nn.Module):
 
         self.task_heads = nn.ModuleList()
         for num_cls in num_classes:
-            heads = copy.deepcopy(common_heads)
+            # `common_heads` may arrive as an OmegaConf DictConfig in struct mode.
+            # Convert to a plain dict so optional heads can be added safely.
+            heads = dict(copy.deepcopy(common_heads))
             if self.velocity_aux_enabled or self.velocity_smooth_enabled:
-                heads.setdefault('vel', (2, 2))
+                if 'vel' not in heads:
+                    heads['vel'] = (2, 2)
             heads.update(dict(heatmap=(num_cls, num_heatmap_convs)))
             separate_head.update(in_channels=share_conv_channel, heads=heads)
             self.task_heads.append(SeparateHead(**separate_head))
@@ -624,7 +627,7 @@ class CenterHead(nn.Module):
                     bboxes = torch.cat([ret[i][k] for ret in rets])
                     bboxes[:, 2] = bboxes[:, 2] - bboxes[:, 5] * 0.5 ## what the bbox predicts is the gravity center
                     # bboxes[:, 2] = bboxes[:, 2]
-                    bboxes = LiDARInstance3DBoxes(bboxes, self.bbox_coder.code_size)
+                    bboxes = LiDARInstance3DBoxes(bboxes, bboxes.shape[-1])
                 elif k == 'scores':
                     scores = torch.cat([ret[i][k] for ret in rets])
                 elif k == 'labels':

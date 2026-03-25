@@ -38,7 +38,7 @@ class ViewOfDelft(Dataset):
                  data_root = 'data/view_of_delft', 
                  sequential_loading=False,
                  split = 'train',
-                 doppler_index=4,
+                 doppler_index=5,
                  rcs_index=3,
                  doppler_clip=None,
                  doppler_normalize=False,

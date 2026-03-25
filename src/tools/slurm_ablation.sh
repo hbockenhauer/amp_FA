@@ -26,14 +26,24 @@ MODE="${MODE:-train}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 NUM_WORKERS="${NUM_WORKERS:-2}"
 DATA_ROOT="${DATA_ROOT:-data/view_of_delft}"
+RUN_TAG="${RUN_TAG:-}"
+WANDB_MODE="${WANDB_MODE:-online}"
 
-# Keep ablations under the DelftBlue 4h walltime budget by default.
-EPOCHS="${EPOCHS:-6}"
-if [ "$EPOCHS" -gt 6 ]; then
-  echo "Requested EPOCHS=$EPOCHS exceeds recommended 6 for 4h limit. Capping to 6."
-  EPOCHS=6
+export WANDB_MODE
+
+# Defaults tuned for the DelftBlue 4h walltime budget.
+# Validation is expensive; validating every 2 epochs gives more training time.
+EPOCHS="${EPOCHS:-10}"
+VAL_EVERY="${VAL_EVERY:-2}"
+
+if [ "$EPOCHS" -lt 1 ]; then
+  echo "Invalid EPOCHS=$EPOCHS (must be >= 1)"
+  exit 2
 fi
-VAL_EVERY="${VAL_EVERY:-$EPOCHS}"
+if [ "$VAL_EVERY" -lt 1 ]; then
+  echo "Invalid VAL_EVERY=$VAL_EVERY (must be >= 1)"
+  exit 2
+fi
 
 BASE_OFF_TOGGLES="model.voxel_encoder.with_doppler_cluster=false model.backbone.use_doppler_attention=false model.voxel_encoder.with_doppler_magnitude=false model.voxel_encoder.with_doppler_sign=false model.head.velocity_auxiliary.enabled=false model.head.velocity_smoothness.enabled=false model.dataset.augment_train_points=false model.dataset.drop_static_points=false model.dataset.doppler_normalize=false model.neck_refine.enabled=false model.test_time_augmentation.enabled=false"
 
@@ -94,8 +104,8 @@ case "$ABLATION_ID" in
     OVERRIDES="$BASE_OFF_TOGGLES model.voxel_encoder.with_doppler_cluster=true model.backbone.use_doppler_attention=true model.head.velocity_auxiliary.enabled=true"
     ;;
   C3)
-    EXP_ID="C3_A1_A2_G1"
-    OVERRIDES="$BASE_OFF_TOGGLES model.voxel_encoder.with_doppler_cluster=true model.backbone.use_doppler_attention=true model.dataset.augment_train_points=true model.dataset.point_dropout_prob=0.1 model.dataset.xy_noise_std=0.05 model.dataset.rcs_noise_std=0.5 model.dataset.doppler_noise_std=0.2"
+    EXP_ID="C3_A1_A2_G4"
+    OVERRIDES="$BASE_OFF_TOGGLES model.voxel_encoder.with_doppler_cluster=true model.backbone.use_doppler_attention=true model.neck_refine.enabled=true"
     ;;
   C4)
     EXP_ID="C4_full"
@@ -108,8 +118,12 @@ case "$ABLATION_ID" in
     ;;
 esac
 
+if [ -n "$RUN_TAG" ]; then
+  EXP_ID="${EXP_ID}_${RUN_TAG}"
+fi
+
 if [ "$MODE" = "train" ]; then
-  echo "Running train ablation $ABLATION_ID as $EXP_ID"
+  echo "Running train ablation $ABLATION_ID as $EXP_ID (epochs=$EPOCHS, val_every=$VAL_EVERY, wandb_mode=$WANDB_MODE)"
   srun python -u src/tools/train.py \
     exp_id="$EXP_ID" \
     data_root="$DATA_ROOT" \

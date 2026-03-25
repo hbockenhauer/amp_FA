@@ -70,7 +70,7 @@ class CenterPoint(L.LightningModule):
 
         self.use_doppler_backbone_attn = backbone_config.get(
             'use_doppler_attention', False)
-        self.doppler_index = voxel_encoder_config.get('doppler_index', 4)
+        self.doppler_index = voxel_encoder_config.get('doppler_index', 5)
         velocity_aux_cfg = head_config.get('velocity_auxiliary', {})
         self.use_velocity_auxiliary = velocity_aux_cfg.get('enabled', False)
         self.tta_enable = tta_cfg.get('enabled', False)

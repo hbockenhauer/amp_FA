@@ -39,7 +39,7 @@ class PillarFeatureNet(nn.Module):
                  mode='max',
                  legacy=True,
                  with_doppler_cluster=False,
-                 doppler_index=4,
+                 doppler_index=5,
                  doppler_num_bins=4,
                  doppler_temp=4.0,
                  with_doppler_magnitude=False,

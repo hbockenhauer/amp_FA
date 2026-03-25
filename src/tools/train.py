@@ -1,6 +1,7 @@
 import os
 import sys
 import os.path as osp
+import threading
 root = os.path.abspath(os.path.join(os.getcwd()))
 if root not in sys.path:
     sys.path.insert(0, root)
@@ -17,6 +18,37 @@ import torch
 from torch.utils.data import DataLoader
 from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
+
+
+def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> None:
+    """Finalize W&B without allowing teardown to block SLURM slot release."""
+    if wandb.run is None:
+        return
+
+    errors = []
+
+    def _finish() -> None:
+        try:
+            wandb.finish(exit_code=0)
+        except Exception as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=_finish, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_s)
+
+    if thread.is_alive():
+        print(
+            f"Warning: wandb.finish() exceeded {timeout_s:.0f}s, forcing teardown.",
+            flush=True,
+        )
+        try:
+            wandb.teardown()
+        except Exception as exc:
+            print(f"Warning: wandb.teardown() raised exception: {exc}", flush=True)
+
+    if errors:
+        print(f"Warning: wandb.finish() raised exception: {errors[0]}", flush=True)
 
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
@@ -62,7 +94,8 @@ def train(cfg: DictConfig)-> None:
         save_dir=osp.join(cfg.output_dir, 'wandb_logs'),
         project='amp',
         name=cfg.exp_id,
-        log_model=False,        
+        log_model=False,
+        mode='online',
     )
     logger.watch(model, log_graph=False)
         
@@ -80,12 +113,14 @@ def train(cfg: DictConfig)-> None:
         sync_batchnorm=cfg.sync_bn,
         enable_model_summary= True,
     )
-    
-    trainer.fit(model, 
-                train_dataloaders=train_dataloader,
-                val_dataloaders=val_dataloader,
-                ckpt_path=cfg.checkpoint_path)
-    wandb.finish()
+
+    try:
+        trainer.fit(model,
+                    train_dataloaders=train_dataloader,
+                    val_dataloaders=val_dataloader,
+                    ckpt_path=cfg.checkpoint_path)
+    finally:
+        _finish_wandb_with_timeout(timeout_s=20.0)
     
 if __name__ == '__main__':
     train()

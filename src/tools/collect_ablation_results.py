@@ -27,6 +27,17 @@ def _find_first(pattern: str, text: str, cast=float):
     return cast(m.group(1))
 
 
+def _find_last(pattern: str, text: str, cast=float):
+    matches = re.findall(pattern, text, flags=re.MULTILINE)
+    if not matches:
+        return None
+    last = matches[-1]
+    # If pattern has multiple capture groups, re.findall returns tuples.
+    if isinstance(last, tuple):
+        last = last[0]
+    return cast(last)
+
+
 def parse_log(path: str) -> Optional[AblationResult]:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read()
@@ -47,18 +58,18 @@ def parse_log(path: str) -> Optional[AblationResult]:
     cyclist_3d = None
 
     # Parse explicit result prints from on_validation_epoch_end.
-    entire_map = _find_first(r"Entire annotated area:\s*[\s\S]*?mAP:\s*([0-9]+(?:\.[0-9]+)?)", text)
-    roi_map = _find_first(r"Driving corridor area:\s*[\s\S]*?mAP:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    entire_map = _find_last(r"Entire annotated area:\s*[\s\S]*?mAP:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    roi_map = _find_last(r"Driving corridor area:\s*[\s\S]*?mAP:\s*([0-9]+(?:\.[0-9]+)?)", text)
 
-    car_3d = _find_first(r"Driving corridor area:\s*[\s\S]*?Car:\s*([0-9]+(?:\.[0-9]+)?)", text)
-    pedestrian_3d = _find_first(r"Driving corridor area:\s*[\s\S]*?Pedestrian:\s*([0-9]+(?:\.[0-9]+)?)", text)
-    cyclist_3d = _find_first(r"Driving corridor area:\s*[\s\S]*?Cyclist:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    car_3d = _find_last(r"Driving corridor area:\s*[\s\S]*?Car:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    pedestrian_3d = _find_last(r"Driving corridor area:\s*[\s\S]*?Pedestrian:\s*([0-9]+(?:\.[0-9]+)?)", text)
+    cyclist_3d = _find_last(r"Driving corridor area:\s*[\s\S]*?Cyclist:\s*([0-9]+(?:\.[0-9]+)?)", text)
 
     # Fallbacks for lightning-style scalar printouts.
     if roi_map is None:
-        roi_map = _find_first(r"validation/ROI/mAP[^0-9]*([0-9]+(?:\.[0-9]+)?)", text)
+        roi_map = _find_last(r"validation/ROI/mAP[^0-9]*([0-9]+(?:\.[0-9]+)?)", text)
     if entire_map is None:
-        entire_map = _find_first(r"validation/entire_area/mAP[^0-9]*([0-9]+(?:\.[0-9]+)?)", text)
+        entire_map = _find_last(r"validation/entire_area/mAP[^0-9]*([0-9]+(?:\.[0-9]+)?)", text)
 
     # If this file has no identifiable experiment or metrics, skip it.
     if exp_id is None and roi_map is None and entire_map is None:
