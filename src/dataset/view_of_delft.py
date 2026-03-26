@@ -58,7 +58,7 @@ class ViewOfDelft(Dataset):
         radar_data = vod_frame_data.radar_data
 
         # --- NEW FAST LOADING --- (Requires dataset preprocessing with: preprocess_pointpainting.py)
-        folder_name = 'painted_radar'
+        folder_name = 'painted_radar_resnet'
         painted_radar_path = os.path.join(os.getcwd(), folder_name, f'{num_frame}.npy')
         radar_data = np.load(painted_radar_path)
         radar_data = torch.tensor(radar_data, dtype=torch.float32)

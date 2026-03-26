@@ -1,5 +1,5 @@
 defaults: 
-  - model: pointPainting_mobileNet
+  - model: pointPainting_resnet
   - _self_
 
 seed: 47020

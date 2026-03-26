@@ -7,6 +7,7 @@ __pycache__/
 painted_radar/
 painted_radar_mobilenet/
 painted_radar_resnet/
+pointpainting_radar_mobileNet/
 lightning_logs/
 outputs/
 pointpainting_radar_mobileNet/wandb_logs/wandb/run-20260325_010221-bnf9imxa/run-bnf9imxa.wandb

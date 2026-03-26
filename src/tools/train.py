@@ -5,6 +5,7 @@ root = os.path.abspath(os.path.join(os.getcwd()))
 if root not in sys.path:
     sys.path.insert(0, root)
     
+    
 import hydra
 import wandb
 from  omegaconf import DictConfig, OmegaConf
@@ -14,12 +15,11 @@ from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
 
 import torch
+torch.set_float32_matmul_precision('medium')    # Lower precision to use Tensor Cores of A100 GPU for faster training
 from torch.utils.data import DataLoader
 from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
 
-import torch
-torch.set_float32_matmul_precision('medium')
 
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
