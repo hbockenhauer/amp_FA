@@ -86,7 +86,7 @@ def preprocess_dataset():
         with torch.no_grad():
             outputs = seg_model(images)['out']
             seg_probs = torch.softmax(outputs, dim=1)
-            painted_channels = seg_probs[:, [3, 1, 2], :, :] 
+            painted_channels = seg_probs[:, [7, 15, 2], :, :] 
             
         painted_cpu = painted_channels.cpu().numpy()
         

@@ -18,6 +18,7 @@ wandb/
 *.log
 slurm-*.out
 slurm-*.err
+*.png
 
 *.ckpt
 *.pt

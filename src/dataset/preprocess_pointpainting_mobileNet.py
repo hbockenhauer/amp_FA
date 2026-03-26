@@ -61,7 +61,7 @@ def preprocess_dataset():
     seg_model = lraspp_mobilenet_v3_large(weights=LRASPP_MobileNet_V3_Large_Weights.DEFAULT).to(device).eval()
     
     data_root = 'data/view_of_delft'
-    save_dir = os.path.join(os.getcwd(), 'painted_radar')
+    save_dir = os.path.join(os.getcwd(), 'painted_radar_mobilenet')
     os.makedirs(save_dir, exist_ok=True)
     
     all_frames = []
@@ -82,11 +82,11 @@ def preprocess_dataset():
     for batch_idx, (images, radars, t_camProjs, frame_nums) in enumerate(dataloader):
         images = images.to(device)
         
-        # Process 16 images at once
+        # Process batch of images at once
         with torch.no_grad():
             outputs = seg_model(images)['out']
             seg_probs = torch.softmax(outputs, dim=1)
-            painted_channels = seg_probs[:, [3, 1, 2], :, :] 
+            painted_channels = seg_probs[:, [7, 15, 2], :, :]   # Changed to match the correct class indices for Car(7), Pedestrian(15), Cyclist(2) in VOC and not COCO >:(
             
         painted_cpu = painted_channels.cpu().numpy()
         
