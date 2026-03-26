@@ -1,4 +1,4 @@
-name: pointpainting_radar_resnet_V2
+name: pointpainting_radar_doppler_mobileNet
 exp_id: ${exp_id}
 
 data_root: ${data_root}
@@ -9,7 +9,7 @@ output_dir: ${output_dir}
 
 dataset:
   use_painted_radar: TRUE
-  painted_radar_dir: painted_radar_resnet
+  painted_radar_dir: painted_radar_mobilenet
   doppler_index: 5
   rcs_index: 3
   doppler_clip: ~
@@ -35,7 +35,7 @@ voxel_encoder:
   with_distance: FALSE
   voxel_size: ${model.voxel_size}
   point_cloud_range: ${model.point_cloud_range}
-  with_doppler_cluster: FALSE
+  with_doppler_cluster: TRUE
   doppler_index: 5
   doppler_num_bins: 6
   doppler_temp: 4.0
@@ -51,7 +51,7 @@ backbone:
   layer_nums: [3, 5, 5]
   layer_strides: [2, 2, 2]
   out_channels: [64, 128, 256]
-  use_doppler_attention: FALSE
+  use_doppler_attention: TRUE
   doppler_attention_stages: [TRUE, TRUE, TRUE]
   doppler_attn_channels: 64
   doppler_attn_kernel: 3
