@@ -22,8 +22,8 @@ from src.dataset import ViewOfDelft, collate_vod_batch
 def train(cfg: DictConfig)-> None:
     L.seed_everything(cfg.seed, workers=True)
     
-    train_dataset = ViewOfDelft(data_root=cfg.data_root, split='train')
-    val_dataset = ViewOfDelft(data_root=cfg.data_root, split='val')
+    train_dataset = ViewOfDelft(data_root=cfg.data_root, split='train', radar_mode=cfg.model.radar_mode)
+    val_dataset   = ViewOfDelft(data_root=cfg.data_root, split='val',   radar_mode=cfg.model.radar_mode)
     
     train_dataloader = DataLoader(train_dataset, 
                                   batch_size=cfg.batch_size, 

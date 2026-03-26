@@ -1,7 +1,6 @@
-name: centerpoint_radar
+name: centerpoint_radar_3frames
 exp_id: ${exp_id}
-
-radar_mode: single
+radar_mode: 3_frames
 
 data_root: ${data_root}
 class_names: ['Car', 'Pedestrian', 'Cyclist']
@@ -10,10 +9,10 @@ voxel_size: [0.32, 0.32, 5]
 output_dir: ${output_dir}
 
 pts_voxel_layer:
-  max_num_points: 5
+  max_num_points: 20
   voxel_size: ${model.voxel_size}
   point_cloud_range: ${model.point_cloud_range}
-  max_voxels: [8000, 20000]
+  max_voxels: [16000, 40000]
 
 voxel_encoder:
   in_channels: 7
@@ -38,7 +37,7 @@ neck:
   out_channels: [128, 128, 128]
 
 head:
-  in_channels: 384 # sum(128, 128, 128)
+  in_channels: 384
   tasks: [
     {num_class: 1, class_names: ['Car']},
     {num_class: 1, class_names: ['Pedestrian']},
@@ -48,7 +47,7 @@ head:
     reg: [2, 2]
     height: [1, 2]
     dim: [3, 2]
-    rot: [2, 2] # no need vel
+    rot: [2, 2]
     heatmap: ~
   share_conv_channel: 64
   bbox_coder:
@@ -93,8 +92,6 @@ head:
     post_max_size: 83
     nms_thr: 0.2
 
-
-# optimizer==>ADAMW
 optimizer:
   lr: 0.001
   weight_decay: 0.01

@@ -24,5 +24,7 @@ log_every: 50
 val_every: 3
 save_top_model: 5
 
+radar_mode: single   # options: single | 3_scans | 5_scans
+
 
 
