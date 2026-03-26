@@ -26,8 +26,11 @@ MODE="${MODE:-train}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 NUM_WORKERS="${NUM_WORKERS:-2}"
 DATA_ROOT="${DATA_ROOT:-data/view_of_delft}"
+PAINTED_RADAR_DIR="${PAINTED_RADAR_DIR:-painted_radar}"
 RUN_TAG="${RUN_TAG:-}"
 WANDB_MODE="${WANDB_MODE:-online}"
+MODEL_CFG="${MODEL_CFG:-pointPainting_mobileNet}"
+USE_PAINTED_RADAR="${USE_PAINTED_RADAR:-true}"
 
 export WANDB_MODE
 
@@ -43,6 +46,20 @@ fi
 if [ "$VAL_EVERY" -lt 1 ]; then
   echo "Invalid VAL_EVERY=$VAL_EVERY (must be >= 1)"
   exit 2
+fi
+
+if [ ! -f "$DATA_ROOT/lidar/ImageSets/train.txt" ]; then
+  echo "Missing dataset split file: $DATA_ROOT/lidar/ImageSets/train.txt"
+  echo "Set DATA_ROOT to your View-of-Delft root directory."
+  exit 2
+fi
+
+if [ "$USE_PAINTED_RADAR" = "true" ] || [ "$USE_PAINTED_RADAR" = "TRUE" ]; then
+  if [ ! -d "$PAINTED_RADAR_DIR" ]; then
+    echo "Missing painted radar directory: $PAINTED_RADAR_DIR"
+    echo "Generate it with src/dataset/preprocess_pointpainting.py or set PAINTED_RADAR_DIR accordingly."
+    exit 2
+  fi
 fi
 
 BASE_OFF_TOGGLES="model.voxel_encoder.with_doppler_cluster=false model.backbone.use_doppler_attention=false model.voxel_encoder.with_doppler_magnitude=false model.voxel_encoder.with_doppler_sign=false model.head.velocity_auxiliary.enabled=false model.head.velocity_smoothness.enabled=false model.dataset.augment_train_points=false model.dataset.drop_static_points=false model.dataset.doppler_normalize=false model.neck_refine.enabled=false model.test_time_augmentation.enabled=false"
@@ -123,8 +140,9 @@ if [ -n "$RUN_TAG" ]; then
 fi
 
 if [ "$MODE" = "train" ]; then
-  echo "Running train ablation $ABLATION_ID as $EXP_ID (epochs=$EPOCHS, val_every=$VAL_EVERY, wandb_mode=$WANDB_MODE)"
+  echo "Running train ablation $ABLATION_ID as $EXP_ID (model=$MODEL_CFG, painted_radar=$USE_PAINTED_RADAR, epochs=$EPOCHS, val_every=$VAL_EVERY, wandb_mode=$WANDB_MODE)"
   srun python -u src/tools/train.py \
+    model="$MODEL_CFG" \
     exp_id="$EXP_ID" \
     data_root="$DATA_ROOT" \
     epochs="$EPOCHS" \
@@ -132,15 +150,19 @@ if [ "$MODE" = "train" ]; then
     save_top_model=1 \
     batch_size="$BATCH_SIZE" \
     num_workers="$NUM_WORKERS" \
+    model.dataset.use_painted_radar="$USE_PAINTED_RADAR" \
+    model.dataset.painted_radar_dir="$PAINTED_RADAR_DIR" \
     $OVERRIDES
 elif [ "$MODE" = "eval" ]; then
   CKPT_PATH="${CKPT_PATH:-outputs/${EXP_ID}/checkpoints/last.ckpt}"
-  echo "Running eval for $EXP_ID with checkpoint $CKPT_PATH"
+  echo "Running eval for $EXP_ID with checkpoint $CKPT_PATH (model=$MODEL_CFG, painted_radar=$USE_PAINTED_RADAR)"
   srun python -u src/tools/eval.py \
-    model=centerpoint_radar \
+    model="$MODEL_CFG" \
     checkpoint_path="$CKPT_PATH" \
     data_root="$DATA_ROOT" \
     num_workers="$NUM_WORKERS" \
+    model.dataset.use_painted_radar="$USE_PAINTED_RADAR" \
+    model.dataset.painted_radar_dir="$PAINTED_RADAR_DIR" \
     $OVERRIDES
 else
   echo "Unsupported MODE: $MODE (use train or eval)"

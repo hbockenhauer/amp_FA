@@ -48,10 +48,8 @@ def _finish_wandb_with_timeout(timeout_s: float = 20.0) -> bool:
             f"Warning: wandb.finish() exceeded {timeout_s:.0f}s, forcing teardown.",
             flush=True,
         )
-        try:
-            wandb.teardown()
-        except Exception as exc:
-            print(f"Warning: wandb.teardown() raised exception: {exc}", flush=True)
+        # Do not call wandb.teardown() here because it can also block indefinitely.
+        # The caller force-exits the process when hang is detected to unblock SLURM.
 
     if errors:
         print(f"Warning: wandb.finish() raised exception: {errors[0]}", flush=True)

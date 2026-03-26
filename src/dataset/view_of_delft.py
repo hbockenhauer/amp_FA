@@ -28,6 +28,8 @@ class ViewOfDelft(Dataset):
                  data_root='data/view_of_delft',
                  sequential_loading=False,
                  split='train',
+                 use_painted_radar=True,
+                 painted_radar_dir='painted_radar',
                  doppler_index=5,
                  rcs_index=3,
                  doppler_clip=None,
@@ -45,6 +47,8 @@ class ViewOfDelft(Dataset):
         self.data_root = data_root
         assert split in ['train', 'val', 'test'], f"Invalid split: {split}. Must be one of ['train', 'val', 'test']"
         self.split = split
+        self.use_painted_radar = use_painted_radar
+        self.painted_radar_dir = painted_radar_dir
         split_file = os.path.join(data_root, 'lidar', 'ImageSets', f'{split}.txt')
 
         with open(split_file, 'r') as f:
@@ -66,14 +70,17 @@ class ViewOfDelft(Dataset):
         
         self.vod_kitti_locations = KittiLocations(root_dir=data_root)
 
-        # PointPainting model for optional on-the-fly painting.
+        # PointPainting model is only needed for optional on-the-fly painting.
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.seg_model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT)
-        self.seg_model.to(self.device).eval()
-        self.image_transform = T.Compose([
-            T.ToTensor(),
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        self.seg_model = None
+        self.image_transform = None
+        if not self.use_painted_radar:
+            self.seg_model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT)
+            self.seg_model.to(self.device).eval()
+            self.image_transform = T.Compose([
+                T.ToTensor(),
+                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
 
     def _apply_doppler_preprocessing(self, radar_data):
         """Apply optional Doppler preprocessing for ablation studies."""
@@ -150,13 +157,15 @@ class ViewOfDelft(Dataset):
         vod_frame_data = FrameDataLoader(kitti_locations=self.vod_kitti_locations, frame_number=num_frame)
         local_transforms = FrameTransformMatrix(vod_frame_data)
         
-        # --- NEW FAST LOADING --- (Requires dataset preprocessing with: preprocess_pointpainting.py)
-        folder_name = 'painted_radar'
-        painted_radar_path = os.path.join(os.getcwd(), folder_name, f'{num_frame}.npy')
-        radar_data = np.load(painted_radar_path)
+        if self.use_painted_radar:
+            # Fast loading for precomputed PointPainting radar features.
+            painted_radar_path = os.path.join(os.getcwd(), self.painted_radar_dir, f'{num_frame}.npy')
+            radar_data = np.load(painted_radar_path)
+        else:
+            radar_data = vod_frame_data.radar_data
+
         radar_data = self._apply_doppler_preprocessing(radar_data)
         radar_data = self._apply_training_augmentation(radar_data)
-        # ------------------------
 
         ## --- POINT PAINTING IMPLEMENTATION ---
         #image = vod_frame_data.image 
