@@ -10,8 +10,8 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --account=education-me-courses-ro47020
 #SBATCH --mail-type=END
-#SBATCH --output=outputs/slurm_centerpoint_ro47020_%j.out
-#SBATCH --error=outputs/slurm_centerpoint_ro47020_%j.err
+#SBATCH --output=outputs/pointPainting_V2_%j.out
+#SBATCH --error=outputs/pointPainting_V2_%j.err
 
 module load 2024r1 miniconda3/4.12.0 cuda/12.5
 
@@ -22,6 +22,7 @@ conda activate amp
 previous=$(nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/tail -n '+2')
 nvidia-smi
 
-srun python -u src/tools/train.py exp_id=centerpoint_baseline_db_try_slurm batch_size=4 num_workers=2 epochs=8
+#srun python -u src/tools/train.py exp_id=pointPainting_resnet_V2 model=pointPainting_resnet batch_size=4 num_workers=2 epochs=25
+srun python -u src/tools/train.py "$@"
 
 nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"
