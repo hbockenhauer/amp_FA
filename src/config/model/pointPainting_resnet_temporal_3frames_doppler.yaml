@@ -1,0 +1,146 @@
+name: pointpainting_radar_resnet_temporal_3frames_doppler
+exp_id: ${exp_id}
+radar_mode: 3_frames
+
+data_root: ${data_root}
+class_names: ['Car', 'Pedestrian', 'Cyclist']
+point_cloud_range: [0, -25.6, -3, 51.2, 25.6, 2]
+voxel_size: [0.32, 0.32, 5]
+output_dir: ${output_dir}
+
+dataset:
+  use_painted_radar: TRUE
+  painted_radar_dir: painted_radar_resnet_3frames
+  radar_mode: 3_frames
+  doppler_index: 5
+  rcs_index: 3
+  doppler_clip: ~
+  doppler_normalize: FALSE
+  drop_static_points: FALSE
+  static_velocity_threshold: 0.2
+  static_keep_prob: 1.0
+  augment_train_points: FALSE
+  point_dropout_prob: 0.0
+  xy_noise_std: 0.0
+  rcs_noise_std: 0.0
+  doppler_noise_std: 0.0
+
+pts_voxel_layer:
+  max_num_points: 20
+  voxel_size: ${model.voxel_size}
+  point_cloud_range: ${model.point_cloud_range}
+  max_voxels: [16000, 40000]
+
+voxel_encoder:
+  in_channels: 10
+  feat_channels: [64]
+  with_distance: FALSE
+  voxel_size: ${model.voxel_size}
+  point_cloud_range: ${model.point_cloud_range}
+  with_doppler_cluster: TRUE
+  doppler_index: 5
+  doppler_num_bins: 6
+  doppler_temp: 4.0
+  with_doppler_magnitude: FALSE
+  with_doppler_sign: FALSE
+
+middle_encoder:
+  in_channels: 64
+  output_shape: [160, 160]
+
+backbone:
+  in_channels: 64
+  layer_nums: [3, 5, 5]
+  layer_strides: [2, 2, 2]
+  out_channels: [64, 128, 256]
+  use_doppler_attention: TRUE
+  doppler_attention_stages: [TRUE, TRUE, TRUE]
+  doppler_attn_channels: 64
+  doppler_attn_kernel: 3
+  doppler_lambda: 2.0
+  doppler_sigma: 0.5
+  doppler_reliability_sigma: 1.0
+
+neck:
+  in_channels: [64, 128, 256]
+  upsample_strides: [1, 2, 4]
+  out_channels: [128, 128, 128]
+
+neck_refine:
+  enabled: FALSE
+  in_channels: 384
+  hidden_channels: 384
+  num_layers: 2
+
+test_time_augmentation:
+  enabled: FALSE
+  flip_y: TRUE
+
+head:
+  in_channels: 384
+  tasks: [
+    {num_class: 1, class_names: ['Car']},
+    {num_class: 1, class_names: ['Pedestrian']},
+    {num_class: 1, class_names: ['Cyclist']}
+    ]
+  common_heads:
+    reg: [2, 2]
+    height: [1, 2]
+    dim: [3, 2]
+    rot: [2, 2]
+    heatmap: ~
+  share_conv_channel: 64
+  bbox_coder:
+    pc_range: ${model.point_cloud_range}
+    post_center_range: [-5, -30.6, -6, 56.2, 30.6, 5]
+    max_num: 350
+    score_threshold: 0.1
+    out_size_factor: 2
+    voxel_size: [0.32, 0.32]
+    code_size: 7
+  separate_head:
+    in_channels: ~
+    heads: ~
+    init_bias: -2.19
+    final_kernel: 3
+  loss_cls:
+    reduction: 'mean'
+    loss_weight: 1.0
+  loss_bbox:
+    reduction: 'mean'
+    loss_weight: 0.25
+  norm_bbox: TRUE
+  use_pred_vel_in_decode: FALSE
+  velocity_auxiliary:
+    enabled: FALSE
+    loss_weight: 0.1
+    use_abs_speed: TRUE
+    reliability_sigma: 1.0
+  velocity_smoothness:
+    enabled: FALSE
+    loss_weight: 0.01
+  train_cfg:
+    grid_size: [160, 160, 1]
+    point_cloud_range: ${model.point_cloud_range}
+    voxel_size: ${model.voxel_size}
+    out_size_factor: 2
+    dense_reg: 1
+    gaussian_overlap: 0.1
+    max_objs: 500
+    min_radius: 2
+    code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  test_cfg:
+    post_center_limit_range: [-5, -30.6, -6, 56.2, 30.6, 5]
+    max_per_img: 500
+    max_pool_nms: False
+    min_radius: [4, 0.3, 0.85]
+    score_threshold: 0.1
+    out_size_factor: 2
+    nms_type: 'circle'
+    pre_max_size: 1000
+    post_max_size: 83
+    nms_thr: 0.2
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.01

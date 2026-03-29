@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import argparse
 import numpy as np
 
 # Add project root to path
@@ -18,9 +19,23 @@ from vod.frame import FrameDataLoader, FrameTransformMatrix
 
 # 1. Custom Dataset to load files using background workers
 class VoDPreprocessDataset(Dataset):
-    def __init__(self, data_root, sample_list):
+    RADAR_MODES = {
+        'single': 'radar',
+        '3_frames': 'radar_3frames',
+        '5_frames': 'radar_5frames',
+    }
+
+    def __init__(self, data_root, sample_list, radar_mode='single'):
         self.sample_list = sample_list
+        if radar_mode not in self.RADAR_MODES:
+            raise ValueError(
+                f"Unsupported radar_mode={radar_mode}. Choose from {list(self.RADAR_MODES.keys())}")
+
         self.vod_kitti_locations = KittiLocations(root_dir=data_root)
+        radar_folder = self.RADAR_MODES[radar_mode]
+        self.vod_kitti_locations.radar_dir = os.path.join(
+            data_root, radar_folder, 'training', 'velodyne')
+
         self.image_transform = T.Compose([
             T.ToTensor(),
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -52,7 +67,24 @@ def custom_collate(batch):
     frame_nums = [item['frame_num'] for item in batch]
     return images, radars, t_camProjs, frame_nums
 
-def preprocess_dataset():
+def parse_args():
+    parser = argparse.ArgumentParser(description='Precompute ResNet pointpainting radar features.')
+    parser.add_argument('--data-root', default='data/view_of_delft',
+                        help='Root directory of the View-of-Delft dataset.')
+    parser.add_argument('--radar-mode', default='single', choices=['single', '3_frames', '5_frames'],
+                        help='Radar source to paint.')
+    parser.add_argument('--save-dir', default=None,
+                        help='Output directory for painted radar .npy files.')
+    parser.add_argument('--batch-size', type=int, default=2,
+                        help='Batch size for segmentation inference.')
+    parser.add_argument('--num-workers', type=int, default=2,
+                        help='DataLoader workers.')
+    parser.add_argument('--prefetch-factor', type=int, default=1,
+                        help='DataLoader prefetch factor.')
+    return parser.parse_args()
+
+
+def preprocess_dataset(args):
     start_time = time.time()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -60,9 +92,18 @@ def preprocess_dataset():
     # 3. Load the fast ResNet model
     seg_model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT).to(device).eval()
     
-    data_root = 'data/view_of_delft'
-    save_dir = os.path.join(os.getcwd(), 'painted_radar_resnet')    # ResNet dataset directory
+    data_root = args.data_root
+    default_save_dirs = {
+        'single': 'painted_radar_resnet',
+        '3_frames': 'painted_radar_resnet_3frames',
+        '5_frames': 'painted_radar_resnet_5frames',
+    }
+    save_dir_name = args.save_dir if args.save_dir else default_save_dirs[args.radar_mode]
+    save_dir = os.path.join(os.getcwd(), save_dir_name)
     os.makedirs(save_dir, exist_ok=True)
+
+    print(f"Radar mode: {args.radar_mode}")
+    print(f"Save directory: {save_dir}")
     
     all_frames = []
     for split in ['train', 'val', 'test']:
@@ -74,10 +115,15 @@ def preprocess_dataset():
     frames_to_process = [f for f in all_frames if not os.path.exists(os.path.join(save_dir, f'{f}.npy'))]
     print(f"Frames left to process: {len(frames_to_process)}")
     
-    dataset = VoDPreprocessDataset(data_root, frames_to_process)
+    dataset = VoDPreprocessDataset(data_root, frames_to_process, radar_mode=args.radar_mode)
     
     # Multiprocessing and Batching
-    dataloader = DataLoader(dataset, batch_size=2, num_workers=2, collate_fn=custom_collate, prefetch_factor=1)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        collate_fn=custom_collate,
+        prefetch_factor=args.prefetch_factor)
     
     for batch_idx, (images, radars, t_camProjs, frame_nums) in enumerate(dataloader):
         images = images.to(device)
@@ -120,4 +166,4 @@ def preprocess_dataset():
     print(f"\nFinished in {(end_time - start_time) / 60:.2f} minutes.")
 
 if __name__ == '__main__':
-    preprocess_dataset()
+    preprocess_dataset(parse_args())

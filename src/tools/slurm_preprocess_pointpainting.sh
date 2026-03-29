@@ -22,6 +22,8 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate amp
 
 PREPROCESS_MODEL="${PREPROCESS_MODEL:-mobilenet}"
+PREPROCESS_RADAR_MODE="${PREPROCESS_RADAR_MODE:-single}"
+PREPROCESS_OUTPUT_DIR="${PREPROCESS_OUTPUT_DIR:-}"
 
 case "${PREPROCESS_MODEL,,}" in
 	mobilenet|mobile)
@@ -30,7 +32,15 @@ case "${PREPROCESS_MODEL,,}" in
 		;;
 	resnet)
 		PREPROCESS_SCRIPT="src/dataset/preprocess_pointpainting_resnet.py"
-		OUTPUT_DIR="painted_radar_resnet"
+		case "${PREPROCESS_RADAR_MODE}" in
+			single) OUTPUT_DIR="painted_radar_resnet" ;;
+			3_frames) OUTPUT_DIR="painted_radar_resnet_3frames" ;;
+			5_frames) OUTPUT_DIR="painted_radar_resnet_5frames" ;;
+			*)
+				echo "Unsupported PREPROCESS_RADAR_MODE=${PREPROCESS_RADAR_MODE}."
+				exit 2
+				;;
+		esac
 		;;
 	*)
 		echo "Unsupported PREPROCESS_MODEL=${PREPROCESS_MODEL}. Use mobilenet or resnet."
@@ -38,5 +48,16 @@ case "${PREPROCESS_MODEL,,}" in
 		;;
 esac
 
-echo "Running PointPainting preprocessing with ${PREPROCESS_MODEL} -> ${OUTPUT_DIR}"
-python -u "${PREPROCESS_SCRIPT}"
+if [[ -n "${PREPROCESS_OUTPUT_DIR}" ]]; then
+	OUTPUT_DIR="${PREPROCESS_OUTPUT_DIR}"
+fi
+
+echo "Running PointPainting preprocessing with ${PREPROCESS_MODEL} (${PREPROCESS_RADAR_MODE}) -> ${OUTPUT_DIR}"
+
+if [[ "${PREPROCESS_MODEL,,}" == "resnet" ]]; then
+	python -u "${PREPROCESS_SCRIPT}" \
+		--radar-mode "${PREPROCESS_RADAR_MODE}" \
+		--save-dir "${OUTPUT_DIR}"
+else
+	python -u "${PREPROCESS_SCRIPT}"
+fi
