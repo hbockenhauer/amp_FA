@@ -34,7 +34,7 @@ class ViewOfDelft(Dataset):
                  data_root='data/view_of_delft',
                  sequential_loading=False,
                  split='train',
-                 use_painted_radar=True,
+                 use_painted_radar=False,
                  painted_radar_dir='painted_radar',
                  radar_mode='single',
                  doppler_index=5,
