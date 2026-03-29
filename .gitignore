@@ -28,3 +28,4 @@ slurm-*.err
 
 *results.txt
 pointpainting_radar_mobileNet/wandb_logs/wandb/run-20260325_010221-bnf9imxa/run-bnf9imxa.wandb
+**/.ipynb_checkpoints/

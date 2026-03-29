@@ -63,6 +63,10 @@ def train(cfg: DictConfig)-> None:
     dataset_cfg = {}
     if 'dataset' in cfg.model:
         dataset_cfg = OmegaConf.to_container(cfg.model.dataset, resolve=True)
+
+    # Temporal configs store radar_mode at model root; pointpainting configs use model.dataset.
+    if 'radar_mode' in cfg.model and 'radar_mode' not in dataset_cfg:
+        dataset_cfg['radar_mode'] = cfg.model.radar_mode
     
     train_dataset = ViewOfDelft(
         data_root=cfg.data_root,

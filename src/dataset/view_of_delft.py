@@ -23,13 +23,20 @@ class ViewOfDelft(Dataset):
         'bbox3d_location': slice(11,14), 
         'bbox3d_rotation': 14, 
     }
-    
+
+    RADAR_MODES = {
+        'single':   'radar',
+        '3_frames': 'radar_3frames',
+        '5_frames': 'radar_5frames',
+    }
+
     def __init__(self,
                  data_root='data/view_of_delft',
                  sequential_loading=False,
                  split='train',
                  use_painted_radar=True,
                  painted_radar_dir='painted_radar',
+                 radar_mode='single',
                  doppler_index=5,
                  rcs_index=3,
                  doppler_clip=None,
@@ -45,12 +52,22 @@ class ViewOfDelft(Dataset):
         super().__init__()
         
         self.data_root = data_root
-        assert split in ['train', 'val', 'test'], f"Invalid split: {split}. Must be one of ['train', 'val', 'test']"
+        assert split in ['train', 'val', 'test'], (
+            f"Invalid split: {split}. Must be one of ['train', 'val', 'test']")
+        assert radar_mode in self.RADAR_MODES, (
+            f"radar_mode must be one of {list(self.RADAR_MODES.keys())}")
+
         self.split = split
         self.use_painted_radar = use_painted_radar
         self.painted_radar_dir = painted_radar_dir
-        split_file = os.path.join(data_root, 'lidar', 'ImageSets', f'{split}.txt')
+        self.radar_mode = radar_mode
 
+        self.vod_kitti_locations = KittiLocations(root_dir=data_root)
+        radar_folder = self.RADAR_MODES[radar_mode]
+        self.vod_kitti_locations.radar_dir = os.path.join(
+            data_root, radar_folder, 'training', 'velodyne')
+
+        split_file = os.path.join(data_root, 'lidar', 'ImageSets', f'{split}.txt')
         with open(split_file, 'r') as f:
             lines = f.readlines()
             self.sample_list = [line.strip() for line in lines]
@@ -67,9 +84,7 @@ class ViewOfDelft(Dataset):
         self.xy_noise_std = xy_noise_std
         self.rcs_noise_std = rcs_noise_std
         self.doppler_noise_std = doppler_noise_std
-        
-        self.vod_kitti_locations = KittiLocations(root_dir=data_root)
-
+ 
     def _apply_doppler_preprocessing(self, radar_data):
         """Apply optional Doppler preprocessing for ablation studies."""
         if radar_data is None:
@@ -154,7 +169,6 @@ class ViewOfDelft(Dataset):
 
         radar_data = self._apply_doppler_preprocessing(radar_data)
         radar_data = self._apply_training_augmentation(radar_data)
-
         gt_labels_3d_list = []
         gt_bboxes_3d_list = []
         if self.split != 'test':
@@ -177,21 +191,18 @@ class ViewOfDelft(Dataset):
                     gt_bboxes_3d_list.append(np.concatenate([bbox3d_locs, bbox3d_dims, bbox3d_rot], axis=0))
 
         radar_data = torch.tensor(radar_data, dtype=torch.float32)
-        
         if gt_bboxes_3d_list == []:
             gt_labels_3d = np.array([0])
-            gt_bboxes_3d = np.zeros((1,7))
+            gt_bboxes_3d = np.zeros((1, 7))
         else:
             gt_labels_3d = np.array(gt_labels_3d_list, dtype=np.int64)
             gt_bboxes_3d = np.stack(gt_bboxes_3d_list, axis=0)
-        
+
         gt_bboxes_3d = LiDARInstance3DBoxes(
             gt_bboxes_3d,
             box_dim=gt_bboxes_3d.shape[-1],
             origin=(0.5, 0.5, 0))
-        
         gt_labels_3d = torch.tensor(gt_labels_3d)
-        
         return dict(
             lidar_data=radar_data,
             gt_labels_3d=gt_labels_3d,
