@@ -36,7 +36,7 @@ export WANDB_MODE
 
 # Defaults tuned for the DelftBlue 4h walltime budget.
 # Validation is expensive; validating every 2 epochs gives more training time.
-EPOCHS="${EPOCHS:-10}"
+EPOCHS="${EPOCHS:-20}"
 VAL_EVERY="${VAL_EVERY:-2}"
 
 if [ "$EPOCHS" -lt 1 ]; then
@@ -57,7 +57,8 @@ fi
 if [ "$USE_PAINTED_RADAR" = "true" ] || [ "$USE_PAINTED_RADAR" = "TRUE" ]; then
   if [ ! -d "$PAINTED_RADAR_DIR" ]; then
     echo "Missing painted radar directory: $PAINTED_RADAR_DIR"
-    echo "Generate it with src/dataset/preprocess_pointpainting.py or set PAINTED_RADAR_DIR accordingly."
+    echo "Generate it with src/dataset/preprocess_pointpainting_mobileNet.py"
+    echo "or src/dataset/preprocess_pointpainting_resnet.py, then set PAINTED_RADAR_DIR accordingly."
     exit 2
   fi
 fi
