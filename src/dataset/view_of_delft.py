@@ -70,18 +70,6 @@ class ViewOfDelft(Dataset):
         
         self.vod_kitti_locations = KittiLocations(root_dir=data_root)
 
-        # PointPainting model is only needed for optional on-the-fly painting.
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.seg_model = None
-        self.image_transform = None
-        if not self.use_painted_radar:
-            self.seg_model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT)
-            self.seg_model.to(self.device).eval()
-            self.image_transform = T.Compose([
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ])
-
     def _apply_doppler_preprocessing(self, radar_data):
         """Apply optional Doppler preprocessing for ablation studies."""
         if radar_data is None:
@@ -166,36 +154,6 @@ class ViewOfDelft(Dataset):
 
         radar_data = self._apply_doppler_preprocessing(radar_data)
         radar_data = self._apply_training_augmentation(radar_data)
-
-        ## --- POINT PAINTING IMPLEMENTATION ---
-        #image = vod_frame_data.image 
-        #
-        #with torch.no_grad():
-        #    img_tensor = self.image_transform(image).unsqueeze(0).to(self.device)
-        #    seg_output = self.seg_model(img_tensor)['out'][0] 
-        #    seg_probs = torch.softmax(seg_output, dim=0) 
-        #    painted_channels = seg_probs[[3, 1, 2], :, :] 
-        #
-        #trans_homo_radar = np.ones((radar_data.shape[0], 4))
-        #trans_homo_radar[:, :3] = radar_data[:, :3]
-#
-        #t_camProj_lidar = local_transforms.camera_projection_matrix @ local_transforms.t_camera_lidar
-#
-        ##uv_coords_homo = homogeneous_transformation(trans_homo_radar, t_camProj_lidar)
-        #uv_coords_homo = (t_camProj_lidar @ trans_homo_radar.T).T
-        #u = (uv_coords_homo[:, 0] / uv_coords_homo[:, 2]).astype(int)
-        #v = (uv_coords_homo[:, 1] / uv_coords_homo[:, 2]).astype(int)
-        #
-        #H, W = image.shape[:2]
-        #valid_mask = (u >= 0) & (u < W) & (v >= 0) & (v < H) & (uv_coords_homo[:, 2] > 0)
-        #
-        #point_scores = np.zeros((radar_data.shape[0], 3), dtype=np.float32)
-        #valid_u = u[valid_mask]
-        #valid_v = v[valid_mask]
-        #point_scores[valid_mask] = painted_channels[:, valid_v, valid_u].cpu().numpy().T
-        #
-        #radar_data = np.concatenate([radar_data, point_scores], axis=-1)
-        ## -------------------------------------
 
         gt_labels_3d_list = []
         gt_bboxes_3d_list = []
