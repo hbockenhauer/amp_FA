@@ -32,7 +32,11 @@ class ViewOfDelft(Dataset):
                  data_root='data/view_of_delft',
                  sequential_loading=False,
                  split='train',
-                 radar_mode='single'):
+                 radar_mode='single',
+                 motion_compensation=False,
+                 motion_dt=0.1,
+                 vr_channel_idx=5,
+                 time_channel_idx=6):
         super().__init__()
         
         self.data_root = data_root
@@ -42,6 +46,10 @@ class ViewOfDelft(Dataset):
         
         self.split = split
         self.radar_mode = radar_mode
+        self.motion_compensation = motion_compensation
+        self.motion_dt = float(motion_dt)
+        self.vr_channel_idx = int(vr_channel_idx)
+        self.time_channel_idx = int(time_channel_idx)
 
         # root_dir stays at dataset root so labels/camera/pose all resolve correctly
         self.vod_kitti_locations = KittiLocations(root_dir=data_root)
@@ -56,6 +64,41 @@ class ViewOfDelft(Dataset):
         with open(split_file, 'r') as f:
             self.sample_list = [line.strip() for line in f.readlines()]
 
+    def _compensate_temporal_points(self, radar_data: np.ndarray) -> np.ndarray:
+        """Compensate past-frame points toward the current frame using radial velocity.
+        """
+        if (not self.motion_compensation) or self.radar_mode == 'single':
+            return radar_data
+        if radar_data.ndim != 2:
+            return radar_data
+
+        num_channels = radar_data.shape[1]
+        if num_channels <= max(self.vr_channel_idx, self.time_channel_idx):
+            return radar_data
+
+        out = radar_data.copy()
+        x = out[:, 0]
+        y = out[:, 1]
+        vr = out[:, self.vr_channel_idx]
+        frame_offset = out[:, self.time_channel_idx]
+
+        # Temporal bins store 0 for current points and negative integers for past frames.
+        dt_seconds = np.maximum(-frame_offset, 0.0) * self.motion_dt
+
+        r = np.sqrt(x * x + y * y)
+        unit_x = np.zeros_like(x)
+        unit_y = np.zeros_like(y)
+        valid = r > 1e-6
+        unit_x[valid] = x[valid] / r[valid]
+        unit_y[valid] = y[valid] / r[valid]
+
+        vx = vr * unit_x
+        vy = vr * unit_y
+        out[:, 0] = x + vx * dt_seconds
+        out[:, 1] = y + vy * dt_seconds
+
+        return out
+
     def __len__(self):
         return len(self.sample_list)
 
@@ -67,6 +110,7 @@ class ViewOfDelft(Dataset):
         local_transforms = FrameTransformMatrix(vod_frame_data)
 
         radar_data = vod_frame_data.radar_data  # (N, 7) for all modes
+        radar_data = self._compensate_temporal_points(radar_data)
 
         gt_labels_3d_list = []
         gt_bboxes_3d_list = []

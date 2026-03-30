@@ -22,18 +22,27 @@ from src.dataset import ViewOfDelft, collate_vod_batch
 def eval(cfg: DictConfig) -> None:
     print('Evaluating model...')
     L.seed_everything(cfg.seed, workers=True)
-    
-    val_dataset = ViewOfDelft(data_root=cfg.data_root, split='val')
-    val_dataloader = DataLoader(val_dataset, 
-                                batch_size=1, 
-                                num_workers=cfg.num_workers, 
-                                shuffle=False,
-                                collate_fn=collate_vod_batch)
 
     checkpoint = torch.load(cfg.checkpoint_path, weights_only=False)
     checkpoint_params = DictConfig(checkpoint["hyper_parameters"])
     print('checkpoint params:', checkpoint_params.keys())
     print('checkpoint params cfg:', checkpoint_params.config.keys())
+
+    model_cfg = checkpoint_params.config.model if 'config' in checkpoint_params else cfg.model
+    dataset_kwargs = dict(
+        radar_mode=model_cfg.get('radar_mode', 'single'),
+        motion_compensation=model_cfg.get('motion_compensation', False),
+        motion_dt=model_cfg.get('motion_dt', 0.1),
+        vr_channel_idx=model_cfg.get('vr_channel_idx', 4),
+        time_channel_idx=model_cfg.get('time_channel_idx', 6),
+    )
+
+    val_dataset = ViewOfDelft(data_root=cfg.data_root, split='val', **dataset_kwargs)
+    val_dataloader = DataLoader(val_dataset,
+                                batch_size=1,
+                                num_workers=cfg.num_workers,
+                                shuffle=False,
+                                collate_fn=collate_vod_batch)
     
     model = CenterPoint.load_from_checkpoint(checkpoint_path=cfg.checkpoint_path)
     model.eval()

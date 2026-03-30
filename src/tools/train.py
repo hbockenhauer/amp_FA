@@ -21,9 +21,17 @@ from src.dataset import ViewOfDelft, collate_vod_batch
 @hydra.main(version_base=None, config_path='../config', config_name='train')    
 def train(cfg: DictConfig)-> None:
     L.seed_everything(cfg.seed, workers=True)
+
+    dataset_kwargs = dict(
+        radar_mode=cfg.model.radar_mode,
+        motion_compensation=cfg.model.get('motion_compensation', False),
+        motion_dt=cfg.model.get('motion_dt', 0.1),
+        vr_channel_idx=cfg.model.get('vr_channel_idx', 4),
+        time_channel_idx=cfg.model.get('time_channel_idx', 6),
+    )
     
-    train_dataset = ViewOfDelft(data_root=cfg.data_root, split='train', radar_mode=cfg.model.radar_mode)
-    val_dataset   = ViewOfDelft(data_root=cfg.data_root, split='val',   radar_mode=cfg.model.radar_mode)
+    train_dataset = ViewOfDelft(data_root=cfg.data_root, split='train', **dataset_kwargs)
+    val_dataset   = ViewOfDelft(data_root=cfg.data_root, split='val', **dataset_kwargs)
     
     train_dataloader = DataLoader(train_dataset, 
                                   batch_size=cfg.batch_size, 

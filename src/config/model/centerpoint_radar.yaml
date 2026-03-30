@@ -2,6 +2,10 @@ name: centerpoint_radar
 exp_id: ${exp_id}
 
 radar_mode: single
+motion_compensation: false
+motion_dt: 0.1
+vr_channel_idx: 4
+time_channel_idx: 6
 
 data_root: ${data_root}
 class_names: ['Car', 'Pedestrian', 'Cyclist']
