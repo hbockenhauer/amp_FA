@@ -27,6 +27,9 @@ def eval(cfg: DictConfig) -> None:
     if 'dataset' in cfg.model:
         dataset_cfg = OmegaConf.to_container(cfg.model.dataset, resolve=True)
     
+    if 'radar_mode' in cfg.model and 'radar_mode' not in dataset_cfg:
+        dataset_cfg['radar_mode'] = cfg.model.radar_mode
+    
     test_dataset = ViewOfDelft(
         data_root=cfg.data_root,
         split='test',
