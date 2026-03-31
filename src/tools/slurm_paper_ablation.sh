@@ -11,17 +11,20 @@
 #SBATCH --output=outputs/slurm_logs/%x_%j.out
 #SBATCH --error=outputs/slurm_logs/%x_%j.err
 
-# Paper ablation study: 3 cumulative improvements over the baseline
+# Paper ablation study: cumulative improvements over the baseline
 #
-#  A0 - Baseline        : CenterPoint radar, single frame
-#  A1 - +PointPainting  : ResNet PointPainting (no Doppler features)
-#  A2 - +Doppler        : A1 + Doppler cluster & backbone attention
-#  A3 - +Temporal       : A2 + 5-frame radar accumulation  (= full model)
+#  A0 - Baseline           : CenterPoint radar, single frame
+#  A1 - +PointPainting     : ResNet PointPainting (no Doppler features)
+#  A2 - +Doppler Cluster   : A1 + pillar-level Doppler clustering only
+#  A3 - +Doppler Attention : A1 + backbone Doppler attention only
+#  A4 - +Doppler Both      : A1 + Doppler cluster & backbone attention
+#  A5 - +Temporal          : A4 + 5-frame radar accumulation
+#  A6 - +Neck              : A5 + neck refinement module  (= full model)
 #
 # Usage:
 #   sbatch --export=ALL,ABLATION_ID=A1 src/tools/slurm_paper_ablation.sh
-#   sbatch --export=ALL,ABLATION_ID=A2,EPOCHS=20 src/tools/slurm_paper_ablation.sh
-#   sbatch --export=ALL,ABLATION_ID=A3,MODE=eval,CKPT_PATH=outputs/A3_temporal_5frames/checkpoints/last.ckpt src/tools/slurm_paper_ablation.sh
+#   sbatch --export=ALL,ABLATION_ID=A4,EPOCHS=12 src/tools/slurm_paper_ablation.sh
+#   sbatch --export=ALL,ABLATION_ID=A6,MODE=eval,CKPT_PATH=outputs/A6_neck/checkpoints/last.ckpt src/tools/slurm_paper_ablation.sh
 
 set -euo pipefail
 
@@ -42,10 +45,13 @@ WANDB_MODE="${WANDB_MODE:-online}"
 RUN_TAG="${RUN_TAG:-}"
 
 # Training schedule — keep within the 4h DelftBlue wall-time limit.
-EPOCHS="${EPOCHS:-20}"
-VAL_EVERY="${VAL_EVERY:-2}"
+EPOCHS="${EPOCHS:-12}"
+VAL_EVERY="${VAL_EVERY:-3}"
 
 export WANDB_MODE
+# Point wandb cache to scratch to avoid DB errors on the shared home filesystem.
+export WANDB_DIR="${TMPDIR:-/tmp}/wandb_$$"
+mkdir -p "$WANDB_DIR"
 
 if [ "$EPOCHS" -lt 1 ]; then
   echo "Invalid EPOCHS=$EPOCHS (must be >= 1)"
@@ -81,22 +87,43 @@ case "$ABLATION_ID" in
     PAINTED_RADAR_DIR="painted_radar_resnet"
     ;;
   A2)
-    # Add Doppler: pillar-level Doppler clustering + backbone Doppler attention.
-    EXP_ID="A2_doppler"
-    MODEL_CFG="pointPainting_resnet_doppler"
+    # Add Doppler clustering only (pillar-level soft assignment, no backbone attention).
+    EXP_ID="A2_doppler_cluster"
+    MODEL_CFG="pointPainting_resnet_doppler_cluster"
     USE_PAINTED_RADAR="true"
     PAINTED_RADAR_DIR="painted_radar_resnet"
     ;;
   A3)
-    # Add Temporal: 5-frame radar accumulation (all three improvements active).
-    EXP_ID="A3_temporal_5frames"
+    # Add Doppler attention only (backbone attention, no pillar clustering).
+    EXP_ID="A3_doppler_attention"
+    MODEL_CFG="pointPainting_resnet_doppler_attention"
+    USE_PAINTED_RADAR="true"
+    PAINTED_RADAR_DIR="painted_radar_resnet"
+    ;;
+  A4)
+    # Add both Doppler features: pillar clustering + backbone attention.
+    EXP_ID="A4_doppler_both"
+    MODEL_CFG="pointPainting_resnet_doppler"
+    USE_PAINTED_RADAR="true"
+    PAINTED_RADAR_DIR="painted_radar_resnet"
+    ;;
+  A5)
+    # Add Temporal: 5-frame radar accumulation (on top of A4).
+    EXP_ID="A5_temporal_5frames"
     MODEL_CFG="pointPainting_resnet_temporal_5frames_doppler"
+    USE_PAINTED_RADAR="true"
+    PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
+    ;;
+  A6)
+    # Add neck refinement module (= full model).
+    EXP_ID="A6_neck"
+    MODEL_CFG="pointPainting_resnet_temporal_5frames_doppler_neck"
     USE_PAINTED_RADAR="true"
     PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
     ;;
   *)
     echo "Unknown ABLATION_ID: $ABLATION_ID"
-    echo "Supported IDs: A0 A1 A2 A3"
+    echo "Supported IDs: A0 A1 A2 A3 A4 A5 A6"
     exit 2
     ;;
 esac
