@@ -21,6 +21,9 @@ unset CONDA_SHLVL
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate amp
 
+# Point PyTorch to pre-downloaded model weights (no internet on compute nodes)
+export TORCH_HOME="${SLURM_SUBMIT_DIR}/torch_cache"
+
 PREPROCESS_MODEL="${PREPROCESS_MODEL:-mobilenet}"
 PREPROCESS_RADAR_MODE="${PREPROCESS_RADAR_MODE:-single}"
 PREPROCESS_OUTPUT_DIR="${PREPROCESS_OUTPUT_DIR:-}"

@@ -8,6 +8,7 @@ __pycache__/
 *.npy
 
 painted_radar/
+torch_cache/
 painted_radar_mobilenet/
 painted_radar_resnet/
 painted_radar_resnet_3frames/
