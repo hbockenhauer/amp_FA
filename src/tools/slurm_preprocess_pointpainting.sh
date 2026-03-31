@@ -21,5 +21,22 @@ unset CONDA_SHLVL
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate amp
 
-# Preprocess all frames into painted_radar/*.npy using PointPainting segmentation.
-python -u src/dataset/preprocess_pointpainting.py
+PREPROCESS_MODEL="${PREPROCESS_MODEL:-mobilenet}"
+
+case "${PREPROCESS_MODEL,,}" in
+	mobilenet|mobile)
+		PREPROCESS_SCRIPT="src/dataset/preprocess_pointpainting_mobileNet.py"
+		OUTPUT_DIR="painted_radar"
+		;;
+	resnet)
+		PREPROCESS_SCRIPT="src/dataset/preprocess_pointpainting_resnet.py"
+		OUTPUT_DIR="painted_radar_resnet"
+		;;
+	*)
+		echo "Unsupported PREPROCESS_MODEL=${PREPROCESS_MODEL}. Use mobilenet or resnet."
+		exit 2
+		;;
+esac
+
+echo "Running PointPainting preprocessing with ${PREPROCESS_MODEL} -> ${OUTPUT_DIR}"
+python -u "${PREPROCESS_SCRIPT}"

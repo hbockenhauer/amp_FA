@@ -86,7 +86,7 @@ def preprocess_dataset():
         with torch.no_grad():
             outputs = seg_model(images)['out']
             seg_probs = torch.softmax(outputs, dim=1)
-            painted_channels = seg_probs[:, [7, 15, 2], :, :]   # Changed to match the correct class indices for Car(7), Pedestrian(15), Cyclist(2) in VOC and not COCO >:(
+            painted_channels = seg_probs[:, [7, 15, 2], :, :]  # Car, Pedestrian, Cyclist VOC class indices.
             
         painted_cpu = painted_channels.cpu().numpy()
         
