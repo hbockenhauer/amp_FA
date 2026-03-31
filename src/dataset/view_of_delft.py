@@ -4,7 +4,6 @@ from src.model.utils import LiDARInstance3DBoxes
 
 import torch
 import torchvision.transforms as T
-from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
 from torch.utils.data import Dataset
 
 from vod.configuration import KittiLocations
@@ -69,6 +68,21 @@ class ViewOfDelft(Dataset):
         self.doppler_noise_std = doppler_noise_std
         
         self.vod_kitti_locations = KittiLocations(root_dir=data_root)
+
+        # Determine model type from loaded config, applicable for pointPainting method inferencing
+        self.painting_model_type = None
+        if self.use_painted_radar:
+            if 'resnet' in self.painted_radar_dir.lower():
+                self.painting_model_type = 'resnet'
+            elif 'mobilenet' in self.painted_radar_dir.lower():
+                self.painting_model_type = 'mobilenet'
+                
+            self.seg_model = None # We will load this only when a file is missing
+            self.image_transform = T.Compose([
+                T.ToTensor(),
+                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+
 
     def _apply_doppler_preprocessing(self, radar_data):
         """Apply optional Doppler preprocessing for ablation studies."""
@@ -136,6 +150,52 @@ class ViewOfDelft(Dataset):
                 0.0, self.doppler_noise_std, size=out.shape[0])
 
         return out
+    
+    def _paint_radar_inference(self, frame_data, transforms, raw_radar_data):
+        # Process unseen data for pointPainting model (Used for inferencing or test set)
+        
+        # Load the model only once to save time
+        if self.seg_model is None:
+            if self.painting_model_type == 'resnet':
+                from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
+                self.seg_model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT).cuda().eval()
+
+            elif self.painting_model_type == 'mobilenet':
+                from torchvision.models.segmentation import lraspp_mobilenet_v3_large, LRASPP_MobileNet_V3_Large_Weights
+                self.seg_model = lraspp_mobilenet_v3_large(weights=LRASPP_MobileNet_V3_Large_Weights.DEFAULT).cuda().eval()
+
+            else:
+                raise ValueError("Could not find model type in folder name!")
+        
+        image = frame_data.image
+        
+        # Segment Image
+        img_tensor = self.image_transform(image).unsqueeze(0).cuda()
+        with torch.no_grad():
+            output = self.seg_model(img_tensor)['out'][0]
+            seg_probs = torch.softmax(output, dim=0).cpu().numpy()
+            
+        # Project Radar Points
+        trans_homo_radar = np.ones((raw_radar_data.shape[0], 4))
+        trans_homo_radar[:, :3] = raw_radar_data[:, :3]
+        t_camProj_lidar = transforms.camera_projection_matrix @ transforms.t_camera_lidar
+        uv_coords_homo = (t_camProj_lidar @ trans_homo_radar.T).T
+        
+        u = (uv_coords_homo[:, 0] / uv_coords_homo[:, 2]).astype(int)
+        v = (uv_coords_homo[:, 1] / uv_coords_homo[:, 2]).astype(int)
+        
+        H, W = image.shape[:2]
+        valid_mask = (u >= 0) & (u < W) & (v >= 0) & (v < H) & (uv_coords_homo[:, 2] > 0)
+        
+        # Extract correct channels: Car(7), Person(15), Bicycle(2)
+        painted_channels = np.zeros((raw_radar_data.shape[0], 3))
+        painted_channels[valid_mask, 0] = seg_probs[7, v[valid_mask], u[valid_mask]]
+        painted_channels[valid_mask, 1] = seg_probs[15, v[valid_mask], u[valid_mask]]
+        painted_channels[valid_mask, 2] = seg_probs[2, v[valid_mask], u[valid_mask]]
+        
+        # Combine original radar with the 3 new probability channels
+        painted_radar = np.concatenate([raw_radar_data, painted_channels], axis=1)
+        return painted_radar
 
     def __len__(self):
         return len(self.sample_list)
@@ -145,12 +205,22 @@ class ViewOfDelft(Dataset):
         vod_frame_data = FrameDataLoader(kitti_locations=self.vod_kitti_locations, frame_number=num_frame)
         local_transforms = FrameTransformMatrix(vod_frame_data)
         
+        #########################################################################################################
+        # Check if pre-processed files exist, otherwise do live processing (much slower)
         if self.use_painted_radar:
-            # Fast loading for precomputed PointPainting radar features.
-            painted_radar_path = os.path.join(os.getcwd(), self.painted_radar_dir, f'{num_frame}.npy')
-            radar_data = np.load(painted_radar_path)
+            npy_path = os.path.join(os.getcwd(), self.painted_radar_dir, f"{num_frame}.npy")
+            
+            if os.path.exists(npy_path):
+                # File exists, load it quickly
+                radar_data = np.load(npy_path)
+            else:
+                # File is missing (hidden test set), load raw data and paint it live
+                raw_radar = vod_frame_data.radar_data
+                radar_data = self._paint_radar_inference(vod_frame_data, local_transforms, raw_radar)
         else:
+            # Baseline model (no painting, raw radar points)
             radar_data = vod_frame_data.radar_data
+        #######################################################################################################
 
         radar_data = self._apply_doppler_preprocessing(radar_data)
         radar_data = self._apply_training_augmentation(radar_data)
