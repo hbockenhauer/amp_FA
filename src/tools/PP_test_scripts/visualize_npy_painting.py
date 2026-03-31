@@ -10,7 +10,21 @@ def visualize_npy_files(frame_numbers, data_root='data/view_of_delft', painted_d
     if painted_dir == 'painted_radar': model_type = 'mobilenet'
     elif painted_dir == 'painted_radar_resnet': model_type = 'resnet'
     elif painted_dir == 'painted_radar_mobilenet': model_type = 'mobilenet'
-    else: raise ValueError("painted_dir must be 'painted_radar' or 'painted_radar_resnet' or 'painted_radar_mobilenet'")
+    elif 'resnet_3frames' in painted_dir: model_type = 'resnet_3frames'
+    elif 'resnet_5frames' in painted_dir: model_type = 'resnet_5frames'
+    else: raise ValueError(f"Unknown painted_dir: {painted_dir}")
+
+    # Determine plot settings based on the model type
+    is_temporal = 'frames' in model_type
+    num_plots = 5 if is_temporal else 4
+    fig_height = 25 if is_temporal else 20
+    
+    if model_type == 'resnet_3frames':
+        min_time = -2
+    elif model_type == 'resnet_5frames':
+        min_time = -4
+    else:
+        min_time = 0
 
     for frame_number in frame_numbers:
         print(f"Loading preprocessed frame {frame_number}...")
@@ -45,13 +59,12 @@ def visualize_npy_files(frame_numbers, data_root='data/view_of_delft', painted_d
         valid_v = v[valid_mask]
         
         # 4. Extract Precalculated Probabilities
-        # The script saves them in the order: [..., Car, Pedestrian, Cyclist]
         car_probs = painted_radar[valid_mask, -3]
         ped_probs = painted_radar[valid_mask, -2]
         cyc_probs = painted_radar[valid_mask, -1]
         
         # 5. Create the Plots
-        fig, axes = plt.subplots(4, 1, figsize=(12, 20))
+        fig, axes = plt.subplots(num_plots, 1, figsize=(12, fig_height))
         
         axes[0].imshow(image)
         axes[0].set_title(f"Original Camera Image (Frame {frame_number}, Model: {model_type})")
@@ -75,6 +88,20 @@ def visualize_npy_files(frame_numbers, data_root='data/view_of_delft', painted_d
         axes[3].axis('off')
         plt.colorbar(sc3, ax=axes[3])
         
+        # Only create the 5th plot if it is a multi-frame dataset
+        if is_temporal:
+            time_index = painted_radar[valid_mask, 6].astype(int)
+            axes[4].imshow(image)
+            
+            sc4 = axes[4].scatter(valid_u, valid_v, c=time_index, cmap='Set1', s=20, edgecolors='black', vmin=min_time, vmax=0)
+            axes[4].set_title(f"Temporal Data: Points Colored by Frame Age (0 to {min_time})")
+            axes[4].axis('off')
+            
+            # Dynamically create the correct ticks (e.g., [0, -1, -2] or [0, -1, -2, -3, -4])
+            ticks = list(range(0, min_time - 1, -1))
+            cbar = plt.colorbar(sc4, ax=axes[4], ticks=ticks)
+            cbar.set_label(f'Frame Age (0 to {min_time})')
+        
         plt.tight_layout()
         save_name = f'npy_visualization_{frame_number}_{model_type}.png'
         plt.savefig(save_name)
@@ -83,5 +110,7 @@ def visualize_npy_files(frame_numbers, data_root='data/view_of_delft', painted_d
 
 if __name__ == '__main__':
     # Add your frames here. Change painted_dir to 'painted_radar_resnet' if needed.
-    frames_to_test = ['00000', '00001', '00002', '00200', '02201', '00600', '01000'] 
-    visualize_npy_files(frames_to_test, painted_dir='painted_radar_mobilenet')
+    #frames_to_test = ['00000', '00001', '00002', '00200', '02201', '00600', '01000']
+    frames_to_test = ['00006', '00009'] 
+    visualize_npy_files(frames_to_test, painted_dir='painted_radar_resnet')
+    #_3frames
