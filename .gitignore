@@ -12,6 +12,7 @@ painted_radar_mobilenet/
 painted_radar_resnet/
 painted_radar_resnet_3frames/
 painted_radar_resnet_5frames/
+images/
 
 outputs/
 lightning_logs/

@@ -1,6 +1,8 @@
 # USAGE example
 # 
-# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/detection_bev_visualisation.py checkpoint_path=outputs/PP_ResNet_doppler_3F/checkpoints/last.ckpt model=pointPainting_resnet_temporal_3frames_doppler
+# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/qualitative_bev_visualisation.py checkpoint_path=outputs/PP_ResNet_doppler_3F/checkpoints/ep33-PP_ResNet_doppler_3F.ckpt model=pointPainting_resnet_temporal_3frames_doppler
+# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/qualitative_bev_visualisation.py checkpoint_path=outputs/BASELINE_e25/checkpoints/ep11-BASELINE_e25.ckpt model=centerpoint_baseline
+# 
 import os
 import sys
 import torch
@@ -18,6 +20,15 @@ from omegaconf import DictConfig, OmegaConf
 from src.model.detector import CenterPoint
 from src.dataset import ViewOfDelft, collate_vod_batch
 from vod.frame import FrameDataLoader
+
+ # --- CONFIGURATION TOGGLES ---
+color_by_class = True    # True: Colors by class | False: All preds are Red
+show_text_labels = False # True: Shows text above box | False: No text
+
+# Define colors for classes
+CLASS_COLORS = {'Car': 'blue', 'Pedestrian': 'orange', 'Cyclist': 'magenta'}
+DEFAULT_PRED_COLOR = 'red'
+GT_COLOR = 'green'
 
 def draw_bev_box(ax, box, color, linestyle='-', label=None):
     """Helper function to draw a 2D bounding box in BEV from 3D box center and dimensions."""
@@ -77,7 +88,7 @@ def generate_qualitative_plots(cfg: DictConfig) -> None:
     os.makedirs(save_folder, exist_ok=True)
 
     # 3. Choose frames to visualize, 08500
-    frames_to_test = ['00306', '05000', '08400']
+    frames_to_test = ['00106', '00290', '00300', '00306', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08300', '08350', '08400']
     frame_to_idx = {frame: i for i, frame in enumerate(dataset.sample_list)}
 
     for frame in frames_to_test:
@@ -132,14 +143,13 @@ def generate_qualitative_plots(cfg: DictConfig) -> None:
         ax_img.set_title(f"Camera View (2D Bounding Boxes) - Frame {frame}")
         ax_img.axis('off')
 
-        # Draw GT 2D Boxes (Green, slightly transparent)
+        # Draw GT 2D Boxes
         for box in gt_2d_boxes:
             x, y, w, h = box
-            # Added alpha=0.6 for transparency
-            rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='green', facecolor='none', alpha=0.6)
+            rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor=GT_COLOR, facecolor='none', alpha=0.6)
             ax_img.add_patch(rect)
 
-        # Draw Predicted 2D Boxes (Red)
+        # Draw Predicted 2D Boxes
         if len(pred_dict['box2d']) > 0:
             for box, score, lbl_idx in zip(pred_dict['box2d'], pred_dict['scores'], pred_dict['label_preds']):
                 if score < 0.3: continue 
@@ -147,40 +157,53 @@ def generate_qualitative_plots(cfg: DictConfig) -> None:
                 w, h = max_x - min_x, max_y - min_y
                 cls_name = model.class_names[int(lbl_idx)]
                 
-                # Added alpha=0.6 for transparency
-                rect = patches.Rectangle((min_x, min_y), w, h, linewidth=2, edgecolor='red', facecolor='none', linestyle='--', alpha=0.8)
+                box_color = CLASS_COLORS[cls_name] if color_by_class else DEFAULT_PRED_COLOR
+                
+                rect = patches.Rectangle((min_x, min_y), w, h, linewidth=2, edgecolor=box_color, facecolor='none', linestyle='--', alpha=0.6)
                 ax_img.add_patch(rect)
                 
-                # Removed 'backgroundcolor' so the text has no white border
-                ax_img.text(min_x, min_y - 5, f"{cls_name} {score:.2f}", color='red', fontsize=10, weight='bold')
+                if show_text_labels:
+                    # FIX: If box is too close to the top edge (< 15 pixels), put label inside the box
+                    label_y = min_y - 5 if min_y > 15 else min_y + 15
+                    # FIX: Prevent label from going off the left edge
+                    label_x = max(5, min_x)
+                    ax_img.text(label_x, label_y, f"{cls_name} {score:.2f}", color=box_color, fontsize=10, weight='bold')
 
         # --- BEV Map Plot ---
         ax_bev.scatter(points[:, 0], points[:, 1], s=2, c='darkgray', alpha=0.8)
         ax_bev.set_title(f"Bird's Eye View (3D Boxes) - {model_name}")
-        ax_bev.set_xlim(0, 50) # Point cloud typically looks forward
-        ax_bev.set_ylim(-25, 25)
+        
+        # Adjusted limits to perfectly match the model's configured point_cloud_range
+        ax_bev.set_xlim(0, 51.2) 
+        ax_bev.set_ylim(-25.6, 25.6)
         ax_bev.set_xlabel("X (meters)")
         ax_bev.set_ylabel("Y (meters)")
         ax_bev.grid(True, linestyle='--', alpha=0.6)
         ax_bev.set_aspect('equal')
 
-        # Draw GT 3D Boxes (Green)
+        # Draw GT 3D Boxes
         for box in gt_3d_tensor:
-            draw_bev_box(ax_bev, box, color='green', linestyle='-')
+            draw_bev_box(ax_bev, box, color=GT_COLOR, linestyle='-')
 
-        # Draw Predicted 3D Boxes (Red)
+        # Draw Predicted 3D Boxes
         if len(pred_dict['box3d_lidar']) > 0:
             for box, score, lbl_idx in zip(pred_dict['box3d_lidar'], pred_dict['scores'], pred_dict['label_preds']):
                 if score < 0.3: continue
                 cls_name = model.class_names[int(lbl_idx)]
-                draw_bev_box(ax_bev, box, color='red', linestyle='--', label=f"{cls_name} {score:.2f}")
+                
+                box_color = CLASS_COLORS[cls_name] if color_by_class else DEFAULT_PRED_COLOR
+                draw_bev_box(ax_bev, box, color=box_color, linestyle='--')
 
-        # Legend
+        # --- Dynamic Legend ---
         from matplotlib.lines import Line2D
-        legend_elements = [
-            Line2D([0], [0], color='green', lw=2, label='Ground Truth'),
-            Line2D([0], [0], color='red', lw=2, linestyle='--', label='Prediction')
-        ]
+        legend_elements = [Line2D([0], [0], color=GT_COLOR, lw=2, label='Ground Truth')]
+        
+        if color_by_class:
+            for cls_name, color in CLASS_COLORS.items():
+                legend_elements.append(Line2D([0], [0], color=color, lw=2, linestyle='--', label=f'Pred: {cls_name}'))
+        else:
+            legend_elements.append(Line2D([0], [0], color=DEFAULT_PRED_COLOR, lw=2, linestyle='--', label='Prediction'))
+            
         ax_bev.legend(handles=legend_elements, loc='upper right')
 
         # 7. Save Output Image

@@ -1,14 +1,32 @@
+# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/visualize_painting.py
+import os
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import torchvision.transforms as T
 from torchvision.models.segmentation import deeplabv3_resnet50, DeepLabV3_ResNet50_Weights
 from torchvision.models.segmentation import lraspp_mobilenet_v3_large, LRASPP_MobileNet_V3_Large_Weights
+
+import sys
+root = os.path.abspath(os.path.join(os.getcwd()))
+if root not in sys.path:
+    sys.path.insert(0, root)
+
 from vod.configuration import KittiLocations
 from vod.frame import FrameDataLoader, FrameTransformMatrix
 
-def visualize_multiple_frames(frame_numbers, data_root='data/view_of_delft', model_type='resnet'):
-    # 1. Load the Model Once (Saves time and memory)
+def visualize_multiple_frames(frame_numbers, data_root='data/view_of_delft', model_type='resnet', radar_mode='single'):
+    # Define radar folders based on your ViewOfDelft dataset class
+    RADAR_MODES = {
+        'single':   'radar',
+        '3_frames': 'radar_3frames',
+        '5_frames': 'radar_5frames',
+    }
+    
+    if radar_mode not in RADAR_MODES:
+        raise ValueError(f"radar_mode must be one of {list(RADAR_MODES.keys())}")
+
+    # 1. Load the Model Once
     if model_type == 'resnet':
         model = deeplabv3_resnet50(weights=DeepLabV3_ResNet50_Weights.DEFAULT).cuda().eval()
     elif model_type == 'mobilenet':
@@ -22,10 +40,13 @@ def visualize_multiple_frames(frame_numbers, data_root='data/view_of_delft', mod
     ])
     
     locations = KittiLocations(root_dir=data_root)
+    # Redirect radar directory to the correct temporal folder
+    radar_folder = RADAR_MODES[radar_mode]
+    locations.radar_dir = os.path.join(data_root, radar_folder, 'training', 'velodyne')
 
     # 2. Loop Through All Frames
     for frame_number in frame_numbers:
-        print(f"Processing frame {frame_number} with {model_type}...")
+        print(f"Processing frame {frame_number} with {model_type} ({radar_mode})...")
         
         # Load Data
         frame_data = FrameDataLoader(kitti_locations=locations, frame_number=frame_number)
@@ -57,12 +78,12 @@ def visualize_multiple_frames(frame_numbers, data_root='data/view_of_delft', mod
         valid_u = u[valid_mask]
         valid_v = v[valid_mask]
         
-        # Extract probabilities for the valid points (using your class indices)
+        # Extract probabilities for the valid points
         car_probs = seg_probs[7, valid_v, valid_u]       # Class 7: Car
-        ped_probs = seg_probs[15, valid_v, valid_u]       # Class 15: Person
+        ped_probs = seg_probs[15, valid_v, valid_u]      # Class 15: Person
         cyc_probs = seg_probs[2, valid_v, valid_u]       # Class 2: Bicycle
         
-        # 3. Create the Plots (Changed to 5 rows)
+        # 3. Create the Plots
         fig, axes = plt.subplots(5, 1, figsize=(12, 25))
         
         # Plot 0: Original Image
@@ -79,31 +100,36 @@ def visualize_multiple_frames(frame_numbers, data_root='data/view_of_delft', mod
         # Plot 2: Car Probabilities (Red)
         axes[2].imshow(image)
         sc1 = axes[2].scatter(valid_u, valid_v, c=car_probs, cmap='Reds', s=20, edgecolors='black')
-        axes[2].set_title(f'Car Probability - {model_type}')
+        axes[2].set_title(f'Car Probability - {model_type} (Radar: {radar_mode})')
         axes[2].axis('off')
         plt.colorbar(sc1, ax=axes[2])
         
         # Plot 3: Pedestrian Probabilities (Green)
         axes[3].imshow(image)
         sc2 = axes[3].scatter(valid_u, valid_v, c=ped_probs, cmap='Greens', s=20, edgecolors='black')
-        axes[3].set_title(f'Pedestrian Probability - {model_type}')
+        axes[3].set_title(f'Pedestrian Probability - {model_type} (Radar: {radar_mode})')
         axes[3].axis('off')
         plt.colorbar(sc2, ax=axes[3])
 
         # Plot 4: Cyclist Probabilities (Blue)
         axes[4].imshow(image)
         sc3 = axes[4].scatter(valid_u, valid_v, c=cyc_probs, cmap='Blues', s=20, edgecolors='black')
-        axes[4].set_title(f'Cyclist Probability - {model_type}')
+        axes[4].set_title(f'Cyclist Probability - {model_type} (Radar: {radar_mode})')
         axes[4].axis('off')
         plt.colorbar(sc3, ax=axes[4])
         
         plt.tight_layout()
-        save_name = f'pointpainting_visualization_{model_type}_{frame_number}.png'
+        save_name = f'pointpainting_vis_{model_type}_{radar_mode}_{frame_number}.png'
         plt.savefig(save_name)
-        plt.close(fig) # Close the figure to free up memory for the next loop
+        plt.close(fig) 
         print(f"Saved visualization to {save_name}\n")
 
 if __name__ == '__main__':
-    # Add the frames you want to visualize as a list
-    frames_to_test = ['00000', '00001', '00002', '00200', '02201']  # Example frame numbers
-    visualize_multiple_frames(frames_to_test, model_type='mobilenet')  # Change to 'resnet' or 'mobilenet' as needed
+    frames_to_test = ['00106', '00290', '00300', '00306', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08300', '08350', '08400'] # Example frame numbers
+    
+    # You can change model_type to 'mobilenet' and radar_mode to 'single', '3_frames', or '5_frames'
+    visualize_multiple_frames(
+        frames_to_test, 
+        model_type='mobilenet', 
+        radar_mode='single'
+    )

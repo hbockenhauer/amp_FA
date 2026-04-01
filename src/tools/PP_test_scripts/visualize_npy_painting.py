@@ -1,3 +1,5 @@
+# python src/tools/PP_test_scripts/visualize_npy_painting.py
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -111,6 +113,6 @@ def visualize_npy_files(frame_numbers, data_root='data/view_of_delft', painted_d
 if __name__ == '__main__':
     # Add your frames here. Change painted_dir to 'painted_radar_resnet' if needed.
     #frames_to_test = ['00000', '00001', '00002', '00200', '02201', '00600', '01000']
-    frames_to_test = ['00006', '00009'] 
+    frames_to_test = ['00106', '00290', '00300', '00306', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08300', '08350', '08400']
     visualize_npy_files(frames_to_test, painted_dir='painted_radar_resnet')
     #_3frames

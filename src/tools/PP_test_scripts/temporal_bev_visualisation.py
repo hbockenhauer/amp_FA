@@ -59,5 +59,5 @@ def save_accumulated_bev(frame_indices, accumulation_steps=[1, 3, 5], save_folde
             print(f"Saved: {filename}")
 
 # --- Execution ---
-frames_to_test = ['00006', '00009', '00010']
+frames_to_test = ['00106', '00290', '00300', '00306', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08300', '08350', '08400']
 save_accumulated_bev(frames_to_test, accumulation_steps=[1, 3, 5])
