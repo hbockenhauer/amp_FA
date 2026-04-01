@@ -115,15 +115,22 @@ case "$ABLATION_ID" in
     PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
     ;;
   A6)
-    # Add neck refinement module (= full model).
+    # Add neck refinement module.
     EXP_ID="A6_neck"
     MODEL_CFG="pointPainting_resnet_temporal_5frames_doppler_neck"
     USE_PAINTED_RADAR="true"
     PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
     ;;
+  A7)
+    # Add wider/deeper PFN to better fuse radar + painted semantic features.
+    EXP_ID="A7_wide_pfn"
+    MODEL_CFG="pointPainting_resnet_temporal_5frames_doppler_neck_wide_pfn"
+    USE_PAINTED_RADAR="true"
+    PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
+    ;;
   *)
     echo "Unknown ABLATION_ID: $ABLATION_ID"
-    echo "Supported IDs: A0 A1 A2 A3 A4 A5 A6"
+    echo "Supported IDs: A0 A1 A2 A3 A4 A5 A6 A7"
     exit 2
     ;;
 esac
