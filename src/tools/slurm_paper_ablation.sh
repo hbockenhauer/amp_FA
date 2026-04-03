@@ -128,9 +128,16 @@ case "$ABLATION_ID" in
     USE_PAINTED_RADAR="true"
     PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
     ;;
+  A8)
+    # Wide PFN without neck: isolates the PFN contribution from the neck refinement.
+    EXP_ID="A8_wide_pfn_no_neck"
+    MODEL_CFG="pointPainting_resnet_temporal_5frames_doppler_wide_pfn"
+    USE_PAINTED_RADAR="true"
+    PAINTED_RADAR_DIR="painted_radar_resnet_5frames"
+    ;;
   *)
     echo "Unknown ABLATION_ID: $ABLATION_ID"
-    echo "Supported IDs: A0 A1 A2 A3 A4 A5 A6 A7"
+    echo "Supported IDs: A0 A1 A2 A3 A4 A5 A6 A7 A8"
     exit 2
     ;;
 esac
