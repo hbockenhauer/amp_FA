@@ -1,4 +1,4 @@
-name: pointpainting_radar_resnet
+name: pointpainting_radar_doppler_attention_resnet
 exp_id: ${exp_id}
 
 data_root: ${data_root}
@@ -30,7 +30,7 @@ pts_voxel_layer:
   max_voxels: [8000, 20000]
 
 voxel_encoder:
-  in_channels: 10 # From 7 to 10 because of the 3 extra channels from segmentation class scores.
+  in_channels: 10 # Added channels for pointpainting
   feat_channels: [64]
   with_distance: FALSE
   voxel_size: ${model.voxel_size}
@@ -51,7 +51,7 @@ backbone:
   layer_nums: [3, 5, 5]
   layer_strides: [2, 2, 2]
   out_channels: [64, 128, 256]
-  use_doppler_attention: FALSE
+  use_doppler_attention: TRUE
   doppler_attention_stages: [TRUE, TRUE, TRUE]
   doppler_attn_channels: 64
   doppler_attn_kernel: 3
@@ -85,7 +85,7 @@ head:
     reg: [2, 2]
     height: [1, 2]
     dim: [3, 2]
-    rot: [2, 2] # no need vel
+    rot: [2, 2]
     heatmap: ~
   share_conv_channel: 64
   bbox_coder:

@@ -1,5 +1,6 @@
-name: pointpainting_radar_resnet
+name: pointpainting_radar_resnet_temporal_5frames_doppler_wide_pfn
 exp_id: ${exp_id}
+radar_mode: 5_frames
 
 data_root: ${data_root}
 class_names: ['Car', 'Pedestrian', 'Cyclist']
@@ -9,7 +10,8 @@ output_dir: ${output_dir}
 
 dataset:
   use_painted_radar: TRUE
-  painted_radar_dir: painted_radar_resnet
+  painted_radar_dir: painted_radar_resnet_5frames
+  radar_mode: 5_frames
   doppler_index: 5
   rcs_index: 3
   doppler_clip: ~
@@ -24,18 +26,18 @@ dataset:
   doppler_noise_std: 0.0
 
 pts_voxel_layer:
-  max_num_points: 5
+  max_num_points: 35
   voxel_size: ${model.voxel_size}
   point_cloud_range: ${model.point_cloud_range}
-  max_voxels: [8000, 20000]
+  max_voxels: [16000, 40000]
 
 voxel_encoder:
-  in_channels: 10 # From 7 to 10 because of the 3 extra channels from segmentation class scores.
-  feat_channels: [64]
+  in_channels: 10
+  feat_channels: [128, 128]  # wider/deeper PFN to better fuse radar + painted semantic features
   with_distance: FALSE
   voxel_size: ${model.voxel_size}
   point_cloud_range: ${model.point_cloud_range}
-  with_doppler_cluster: FALSE
+  with_doppler_cluster: TRUE
   doppler_index: 5
   doppler_num_bins: 6
   doppler_temp: 4.0
@@ -43,15 +45,15 @@ voxel_encoder:
   with_doppler_sign: FALSE
 
 middle_encoder:
-  in_channels: 64
+  in_channels: 128
   output_shape: [160, 160]
 
 backbone:
-  in_channels: 64
+  in_channels: 128
   layer_nums: [3, 5, 5]
   layer_strides: [2, 2, 2]
   out_channels: [64, 128, 256]
-  use_doppler_attention: FALSE
+  use_doppler_attention: TRUE
   doppler_attention_stages: [TRUE, TRUE, TRUE]
   doppler_attn_channels: 64
   doppler_attn_kernel: 3
@@ -75,7 +77,7 @@ test_time_augmentation:
   flip_y: TRUE
 
 head:
-  in_channels: 384 # sum(128, 128, 128)
+  in_channels: 384
   tasks: [
     {num_class: 1, class_names: ['Car']},
     {num_class: 1, class_names: ['Pedestrian']},
@@ -85,7 +87,7 @@ head:
     reg: [2, 2]
     height: [1, 2]
     dim: [3, 2]
-    rot: [2, 2] # no need vel
+    rot: [2, 2]
     heatmap: ~
   share_conv_channel: 64
   bbox_coder:
@@ -139,8 +141,6 @@ head:
     post_max_size: 83
     nms_thr: 0.2
 
-
-# optimizer==>ADAMW
 optimizer:
   lr: 0.001
   weight_decay: 0.01
