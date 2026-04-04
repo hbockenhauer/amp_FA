@@ -1,7 +1,7 @@
 # USAGE example
 # 
 # srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/qualitative_bev_visualisation.py checkpoint_path=outputs/PP_ResNet_doppler_3F/checkpoints/ep33-PP_ResNet_doppler_3F.ckpt model=pointPainting_resnet_temporal_3frames_doppler
-# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/qualitative_bev_visualisation.py checkpoint_path=outputs/BASELINE_e25/checkpoints/ep11-BASELINE_e25.ckpt model=centerpoint_baseline
+# srun --partition=gpu-a100-small --account=education-me-courses-ro47020 --time=03:00:00 --ntasks=1 --cpus-per-task=2 --mem-per-cpu=4G --gpus-per-task=1 python src/tools/PP_test_scripts/qualitative_bev_visualisation.py checkpoint_path=outputs/PP_resnet_doppler_neck_wide_pfn_5F/checkpoints/a7.ckpt model=pointPainting_resnet_temporal_5frames_doppler_neck_wide_pfn
 # 
 import os
 import sys
@@ -31,28 +31,40 @@ DEFAULT_PRED_COLOR = 'red'
 GT_COLOR = 'green'
 
 def draw_bev_box(ax, box, color, linestyle='-', label=None):
-    """Helper function to draw a 2D bounding box in BEV from 3D box center and dimensions."""
-    x, y = box[0], box[1]
+    """Draws a BEV bounding box with Depth on Y and Lateral on X."""
+    x_lidar, y_lidar = box[0], box[1]
     dx, dy = box[3], box[4]
-    yaw = box[6]
+    original_yaw = box[6]
 
-    cos_yaw = np.cos(yaw)
-    sin_yaw = np.sin(yaw)
+    # --- THE CRITICAL FIX ---
+    # Convert the raw KITTI Camera Yaw into LiDAR Yaw
+    yaw = -original_yaw - (np.pi / 2)
 
-    # Calculate 4 corners relative to the center
+    # 1. Swap the center coordinates for the plot
+    plot_x = -y_lidar  # Lateral (Left/Right)
+    plot_y = x_lidar   # Depth (Forward)
+
+    # 2. Define corners relative to center
     x_corners = np.array([dx/2, dx/2, -dx/2, -dx/2])
     y_corners = np.array([dy/2, -dy/2, -dy/2, dy/2])
 
-    # Rotate and translate to actual coordinates
-    x_rot = x + x_corners * cos_yaw - y_corners * sin_yaw
-    y_rot = y + x_corners * sin_yaw + y_corners * cos_yaw
+    # 3. Rotate corners using the CORRECTED yaw
+    cos_yaw = np.cos(yaw)
+    sin_yaw = np.sin(yaw)
+    x_rot = x_corners * cos_yaw - y_corners * sin_yaw
+    y_rot = x_corners * sin_yaw + y_corners * cos_yaw
 
-    pts = np.stack([x_rot, y_rot], axis=1)
+    # 4. Swap X and Y of the rotated corners to match the new plot axes
+    plot_corners_x = -y_rot + plot_x
+    plot_corners_y = x_rot + plot_y
+
+    # Plot the polygon
+    pts = np.stack([plot_corners_x, plot_corners_y], axis=1)
     poly = patches.Polygon(pts, closed=True, linewidth=2, edgecolor=color, facecolor='none', linestyle=linestyle)
     ax.add_patch(poly)
     
     if label:
-        ax.text(x_rot[0], y_rot[0] + 0.5, label, color=color, fontsize=9, weight='bold')
+        ax.text(plot_corners_x[0], plot_corners_y[0] + 0.5, label, color=color, fontsize=9, weight='bold')
 
 @hydra.main(version_base=None, config_path='../../config', config_name="test")
 def generate_qualitative_plots(cfg: DictConfig) -> None:
@@ -88,7 +100,7 @@ def generate_qualitative_plots(cfg: DictConfig) -> None:
     os.makedirs(save_folder, exist_ok=True)
 
     # 3. Choose frames to visualize, 08500
-    frames_to_test = ['00106', '00290', '00300', '00306', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08300', '08350', '08400']
+    frames_to_test = ['00056', '00106', '00186', '00290', '00300', '00306', '00406', '00506', '00606', '00706', '03000', '03500', '04000', '04500', '05000', '05005', '05010', '08280', '08290', '08300', '08345', '08350', '08400', '08405']
     frame_to_idx = {frame: i for i, frame in enumerate(dataset.sample_list)}
 
     for frame in frames_to_test:
@@ -170,14 +182,15 @@ def generate_qualitative_plots(cfg: DictConfig) -> None:
                     ax_img.text(label_x, label_y, f"{cls_name} {score:.2f}", color=box_color, fontsize=10, weight='bold')
 
         # --- BEV Map Plot ---
-        ax_bev.scatter(points[:, 0], points[:, 1], s=2, c='darkgray', alpha=0.8)
+        # Swap axes: plot X = -radar Y, plot Y = radar X
+        ax_bev.scatter(-points[:, 1], points[:, 0], s=2, c='darkgray', alpha=0.8)
         ax_bev.set_title(f"Bird's Eye View (3D Boxes) - {model_name}")
         
-        # Adjusted limits to perfectly match the model's configured point_cloud_range
-        ax_bev.set_xlim(0, 51.2) 
-        ax_bev.set_ylim(-25.6, 25.6)
-        ax_bev.set_xlabel("X (meters)")
-        ax_bev.set_ylabel("Y (meters)")
+        # Swapped limits to match the new orientation while maintaining the 51.2 x 51.2 grid
+        ax_bev.set_xlim(-25.6, 25.6)  # Lateral limits
+        ax_bev.set_ylim(0, 51.2)      # Depth limits
+        ax_bev.set_xlabel("Lateral (Right/Left) [m]")
+        ax_bev.set_ylabel("Depth (Forward) [m]")
         ax_bev.grid(True, linestyle='--', alpha=0.6)
         ax_bev.set_aspect('equal')
 
